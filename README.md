@@ -4,6 +4,8 @@
 
 Hosted at **glitchlab.live** (pending DNS). Part of the **GlitchWorks** constellation.
 
+**Repository:** private · **License:** all rights reserved (see [LICENSE](LICENSE)).
+
 ---
 
 ## What It Does
@@ -57,7 +59,14 @@ Each effect parameter mappable to a MIDI CC via `WebMIDI API`. Works with midi-g
 
 ## Status
 
-`spec-complete` → `prototype-pending`
+| Layer | State |
+|-------|--------|
+| Product spec | **Complete** (`README.md`, `tasks.md`) |
+| Implementation | **Not started** — no `package.json` / WebGL scaffold yet |
+| Deploy | **glitchlab.live** DNS pending |
+| Dex map | Submodule `dex/09-repos/GlitchLab` in [dev-master](https://github.com/k-dot-greyz/dev-master); project notes in `dex/03-docs/projects/GlitchLab/` |
+
+Next epic: **GLITCHLAB-CORE-001** (Vite + TypeScript + WebGL2 pass-through) in [tasks.md](tasks.md).
 
 ---
 

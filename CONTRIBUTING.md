@@ -2,6 +2,8 @@
 
 Welcome to **GlitchLab** — an experimental browser lab for real-time glitch art: stackable WebGL effects, MIDI-mappable parameters, and export pipelines. This repo is part of the **GlitchWorks** constellation; product overview lives in [README.md](./README.md). Task breakdown: [tasks.md](./tasks.md).
 
+**Access:** private repository · **License:** all rights reserved ([LICENSE](./LICENSE)). Collaborators only; no public redistribution.
+
 ---
 
 ## Repository layout
