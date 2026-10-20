@@ -1,0 +1,1631 @@
+<title>GlitchLab Architecture Sketch</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600&family=Unbounded:wght@600;800&display=swap">
+<style>
+/* Layout: lab-instrument page. Live rack up top (stage + module rack), then numbered spec sections (§ ids are roast handles). Single dark world on purpose: a CRT bench. */
+:root {
+  color-scheme: dark;
+  --ground: #0e1017;
+  --panel: #151824;
+  --panel-2: #1c2030;
+  --line: #2a2f43;
+  --fg: #e7e9f2;
+  --muted: #9a9fb5;
+  --dim: #6c7189;
+  --r: #ff4f6e;
+  --g: #3be8a0;
+  --b: #5b93ff;
+  --warn: #ffb648;
+  --bad: #ff7272;
+  --ok: #5fd39a;
+  --code: #d7dae8;
+  --stage: #000000;
+  --scrim: rgba(8, 9, 14, 0.92);
+  --display: 'Unbounded', 'Arial Black', system-ui, sans-serif;
+  --body: 'IBM Plex Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --mono: 'JetBrains Mono', ui-monospace, 'SFMono-Regular', Menlo, Consolas, monospace;
+}
+html { background: var(--ground); }
+body { background: var(--ground); color: var(--fg); font: 15.5px/1.6 var(--body); }
+body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 10; background: var(--ground); }
+.wrap { max-width: 1200px; margin: 0 auto; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 28px 64px; }
+a { color: var(--b); }
+code { font-family: var(--mono); font-size: 0.88em; background: var(--panel-2); border: 1px solid var(--line); border-radius: 3px; padding: 0 5px; color: var(--code); }
+h1, h2, h3 { text-wrap: balance; margin: 0; }
+p { margin: 0; }
+
+/* masthead */
+.masthead { display: grid; gap: 14px; padding-block: 12px 28px; }
+.eyebrow { font: 500 12px/1.4 var(--mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+.eyebrow b { color: var(--fg); font-weight: 600; }
+h1 { font: 800 clamp(2.6rem, 8vw, 5.6rem)/0.95 var(--display); letter-spacing: -0.02em;
+  text-shadow: -0.045em 0 color-mix(in srgb, var(--r) 80%, transparent), 0.045em 0 color-mix(in srgb, var(--b) 80%, transparent); }
+@media (prefers-reduced-motion: no-preference) {
+  h1 { animation: jolt 700ms steps(1, end) 300ms 1 both; }
+  @keyframes jolt {
+    0% { transform: translateX(0); }
+    18% { transform: translateX(-6px) skewX(-8deg); clip-path: inset(0 0 40% 0); }
+    30% { transform: translateX(5px); clip-path: inset(30% 0 0 0); }
+    44% { transform: translateX(-2px); clip-path: none; }
+    58% { transform: translateX(0); }
+    100% { transform: none; clip-path: none; }
+  }
+}
+.lede { max-width: 68ch; font-size: 17px; color: var(--fg); }
+.meta { font: 400 12.5px/1.5 var(--mono); color: var(--dim); }
+
+/* sections */
+.sec { border-top: 1px solid var(--line); padding-block: 48px 8px; display: grid; gap: 20px; }
+.sec-h { display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap; }
+.sid { font: 600 13px var(--mono); color: var(--muted); letter-spacing: 0.04em; }
+h2 { font: 600 clamp(1.35rem, 3vw, 1.85rem)/1.2 var(--display); letter-spacing: -0.01em; }
+h3 { font: 600 16px/1.3 var(--body); }
+.prose { max-width: 72ch; display: grid; gap: 12px; }
+.prose p { color: var(--fg); }
+.muted { color: var(--muted); }
+.small { font-size: 13.5px; }
+
+/* chips */
+.chip { display: inline-block; font: 500 10.5px/1.6 var(--mono); letter-spacing: 0.07em; text-transform: uppercase; padding: 1px 7px; border-radius: 999px; border: 1px solid currentColor; white-space: nowrap; }
+.chip.ok { color: var(--ok); }
+.chip.miss { color: var(--bad); }
+.chip.warn { color: var(--warn); }
+.chip.pure { color: var(--g); }
+.chip.gpu { color: var(--b); }
+.chip.io { color: var(--r); }
+.chip.temporal { color: var(--r); }
+.chip.spatial { color: var(--b); }
+
+/* tables */
+.tbl { overflow-x: auto; border: 1px solid var(--line); border-radius: 6px; background: var(--panel); }
+table { width: 100%; border-collapse: collapse; font-size: 14px; }
+th, td { text-align: left; padding: 10px 14px; border-bottom: 1px solid var(--line); vertical-align: top; }
+tr:last-child td { border-bottom: 0; }
+th { font: 500 11px/1.4 var(--mono); text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); background: var(--panel-2); }
+td.k { font-family: var(--mono); font-size: 13px; white-space: nowrap; }
+td.lv { font: 600 20px var(--display); white-space: nowrap; }
+
+pre { margin: 0; background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 14px 16px; overflow-x: auto; font: 12.5px/1.6 var(--mono); color: var(--code); }
+pre .c { color: var(--dim); }
+.codegrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.codegrid > div { min-width: 0; display: grid; gap: 8px; align-content: start; }
+.cap { font: 500 11.5px var(--mono); color: var(--muted); letter-spacing: 0.04em; }
+@media (max-width: 820px) { .codegrid { grid-template-columns: minmax(0, 1fr); } }
+
+ol.list, ul.list { margin: 0; padding-left: 1.3em; display: grid; gap: 10px; max-width: 78ch; }
+ol.tick { list-style: none; margin: 0; padding: 0; display: grid; gap: 0; border: 1px solid var(--line); border-radius: 6px; background: var(--panel); }
+ol.tick li { display: grid; grid-template-columns: 2.2em minmax(0, 1fr) auto; gap: 12px; align-items: baseline; padding: 10px 14px; border-bottom: 1px solid var(--line); }
+ol.tick li:last-child { border-bottom: 0; }
+ol.tick .n { font: 600 13px var(--mono); color: var(--dim); }
+ol.tick code { background: none; border: 0; padding: 0; }
+
+/* effect panels */
+.fx-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+@media (max-width: 820px) { .fx-grid { grid-template-columns: minmax(0, 1fr); } }
+.fx { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 18px; display: grid; gap: 10px; align-content: start; min-width: 0; }
+.fx-top { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.fx dl { margin: 0; display: grid; grid-template-columns: 5.5em minmax(0, 1fr); gap: 6px 12px; font-size: 13.5px; }
+.fx dt { font: 500 11px/1.9 var(--mono); text-transform: uppercase; letter-spacing: 0.07em; color: var(--muted); }
+.fx dd { margin: 0; min-width: 0; }
+
+/* spike */
+.spike-grid { display: grid; grid-template-columns: minmax(0, 1fr) 350px; gap: 18px; align-items: start; }
+@media (max-width: 940px) { .spike-grid { grid-template-columns: minmax(0, 1fr); } }
+.stage-col { display: grid; gap: 10px; min-width: 0; }
+.notice { font-size: 13px; color: var(--warn); display: flex; gap: 8px; align-items: baseline; }
+.stage { position: relative; background: var(--stage); border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
+.stage canvas { display: block; width: 100%; height: auto; aspect-ratio: 16 / 9; max-width: 100%; }
+#stage-msg { position: absolute; inset: 0; background: var(--scrim); display: grid; place-content: center; gap: 8px; padding: 24px; text-align: left; }
+#stage-msg .code { font: 600 12px var(--mono); color: var(--bad); letter-spacing: 0.06em; }
+#stage-msg pre { max-height: 140px; }
+.transport { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; }
+.tgroup { display: flex; gap: 6px; align-items: center; }
+.tlabel { font: 500 11px var(--mono); text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); }
+.btn { font: 500 12.5px/1 var(--mono); padding: 8px 12px; border: 1px solid var(--line); background: var(--panel-2); color: var(--fg); border-radius: 4px; cursor: pointer; }
+.btn:hover { border-color: var(--muted); }
+.btn.primary { background: var(--fg); color: var(--ground); border-color: var(--fg); }
+.btn:disabled { opacity: 0.45; cursor: not-allowed; }
+.btn.sq { padding: 6px 8px; min-width: 28px; }
+input[type=number] { font: 500 13px var(--mono); width: 5.2em; padding: 6px 8px; background: var(--panel-2); color: var(--fg); border: 1px solid var(--line); border-radius: 4px; }
+select { font: 500 12.5px var(--mono); padding: 5px 6px; background: var(--panel-2); color: var(--fg); border: 1px solid var(--line); border-radius: 4px; max-width: 100%; }
+:is(.btn, input, select, textarea, summary):focus-visible { outline: 2px solid var(--b); outline-offset: 2px; }
+.steps { display: flex; gap: 3px; }
+.st { width: 9px; height: 9px; background: var(--line); }
+.st.bar { background: color-mix(in srgb, var(--line) 50%, var(--muted)); }
+.st.on { background: var(--r); }
+.lamp { font: 600 11px/1 var(--mono); letter-spacing: 0.08em; padding: 5px 8px; border: 1px solid var(--line); color: var(--dim); border-radius: 3px; }
+.lamp.on { background: var(--r); border-color: var(--r); color: var(--ground); }
+.guardline { font: 400 12px/1.5 var(--mono); color: var(--muted); min-height: 1.5em; }
+.guardline.off { color: var(--warn); }
+.hint { font-size: 12.5px; color: var(--dim); }
+
+.midi { display: grid; gap: 8px; border: 1px solid var(--line); border-radius: 6px; padding: 10px 12px; background: var(--panel); }
+.guardline.err { color: var(--bad); }
+.btn[aria-pressed="true"]:not(.primary) { border-color: var(--b); color: var(--b); }
+.prow.armed { outline: 1px dashed var(--b); outline-offset: 3px; }
+.prow label .cc { font: 500 10px var(--mono); color: var(--b); }
+.rack { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; min-width: 0; }
+@media (min-width: 941px) { .rack { max-height: 640px; overflow-y: auto; } }
+.rack-h { display: flex; justify-content: space-between; align-items: baseline; padding: 12px 14px; border-bottom: 1px solid var(--line); position: sticky; top: 0; background: var(--panel); z-index: 1; }
+.mod { padding: 12px 14px 14px; border-bottom: 1px solid var(--line); display: grid; gap: 8px; }
+.mod:last-child { border-bottom: 0; }
+.mod.off .prow { opacity: 0.45; }
+.mod-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.mod-head label { display: flex; gap: 8px; align-items: center; font-weight: 600; cursor: pointer; }
+.mod-head .iid { font: 400 11.5px var(--mono); color: var(--dim); }
+.mod-head .order { margin-left: auto; display: flex; gap: 4px; }
+.prow { display: grid; grid-template-columns: 6.6em minmax(0, 1fr) 3.4em; gap: 8px; align-items: center; font-size: 13px; }
+.prow label { color: var(--muted); display: flex; flex-direction: column; line-height: 1.2; }
+.prow label .rt { font: 500 10px var(--mono); color: var(--g); }
+.prow label .fr { font: 500 10px var(--mono); color: var(--warn); }
+.prow output { font: 500 12px var(--mono); text-align: right; font-variant-numeric: tabular-nums; }
+.prow input[type=range] { width: 100%; accent-color: var(--fg); }
+.mod.temporal .prow input[type=range] { accent-color: var(--r); }
+.mod.spatial .prow input[type=range] { accent-color: var(--b); }
+
+details.json { border: 1px solid var(--line); border-radius: 6px; background: var(--panel); }
+details.json summary { cursor: pointer; padding: 12px 14px; font: 500 13px var(--mono); }
+.json-body { padding: 0 14px 14px; display: grid; gap: 10px; }
+textarea { width: 100%; min-height: 280px; resize: vertical; box-sizing: border-box; font: 12px/1.5 var(--mono); background: var(--ground); color: var(--code); border: 1px solid var(--line); border-radius: 4px; padding: 10px; }
+.row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+#json-msg { font: 400 12.5px/1.5 var(--mono); white-space: pre-wrap; }
+#json-msg.err { color: var(--bad); }
+#json-msg.ok { color: var(--ok); }
+#img-msg { font: 400 12px var(--mono); color: var(--muted); }
+#img-msg.err { color: var(--bad); }
+.visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+footer { border-top: 1px solid var(--line); margin-top: 48px; padding-top: 20px; font: 400 12.5px var(--mono); color: var(--dim); }
+</style>
+
+<div class="wrap">
+
+<header class="masthead">
+  <div class="eyebrow">k-dot-greyz / <b>GlitchLab</b> · architecture sketch v0.1 · draft for roast</div>
+  <h1>GlitchLab</h1>
+  <p class="lede">A glitch synthesizer for pixels. A source runs through an ordered effect stack, modulators move the knobs, a transport clock keeps everything on the grid, and the whole state exports as JSON. This page is the sketch to roast before any code lands in the repo. The rack below is a throwaway spike to test the look and the card contract. It is not repo code.</p>
+  <p class="meta">Source: GlitchLab-main.zip (README.md, CONTRIBUTING.md, tasks.md, dex-entry.md) · 17 Oct 2026 · § numbers are roast handles</p>
+</header>
+
+<!-- §0 SPIKE -->
+<section class="sec" id="spike" aria-labelledby="h-spike">
+  <div class="sec-h"><span class="sid">§0</span><h2 id="h-spike">Live spike</h2><span class="chip warn">throwaway</span></div>
+  <div class="spike-grid">
+    <div class="stage-col">
+      <p class="notice"><span aria-hidden="true">▲</span><span>Rapid image changes. The flash guard is on by default and caps the settings most likely to flash. It is a heuristic, not a certified flash analyzer.</span></p>
+      <div class="stage">
+        <canvas id="gl" width="800" height="450" aria-label="Live glitch output: stutter gate, 3D RGB split, granular and CRT effects applied to a test card"></canvas>
+        <div id="stage-msg" hidden></div>
+      </div>
+      <div class="transport" role="group" aria-label="Transport">
+        <button class="btn primary" id="play" type="button" aria-pressed="true">Pause</button>
+        <div class="tgroup"><label class="tlabel" for="bpm">BPM</label><input type="number" id="bpm" min="40" max="240" step="1" value="122"><button class="btn" id="tap" type="button">Tap</button></div>
+        <div class="tgroup"><label class="tlabel" for="seed">Seed</label><input type="number" id="seed" min="0" max="9999" step="1" value="7"><button class="btn sq" id="reseed" type="button" aria-label="New random seed">⟳</button></div>
+        <div class="tgroup"><input type="checkbox" id="guard" checked><label class="tlabel" for="guard">Flash guard</label></div>
+        <div class="tgroup" aria-hidden="true"><div class="steps" id="steps"></div></div>
+        <span class="lamp" id="hold-lamp">HOLD</span>
+      </div>
+      <div class="guardline" id="guard-note" aria-live="polite"></div>
+      <div class="midi" role="group" aria-label="MIDI">
+        <div class="transport">
+          <button class="btn" id="midi-connect" type="button">Connect MIDI</button>
+          <div class="tgroup"><label class="tlabel" for="midi-in">In</label><select id="midi-in" disabled><option value="*">All inputs</option></select></div>
+          <div class="tgroup"><label class="tlabel" for="midi-out">Out</label><select id="midi-out" disabled><option value="">No output</option></select></div>
+          <div class="tgroup"><input type="checkbox" id="midi-clock" disabled><label class="tlabel" for="midi-clock">Follow clock</label></div>
+          <div class="tgroup"><label class="tlabel" for="midi-offset">Offset ms</label><input type="number" id="midi-offset" min="-250" max="250" step="1" value="0"></div>
+          <button class="btn" id="midi-learn" type="button" aria-pressed="false" disabled>Learn</button>
+          <span class="lamp" id="midi-lamp">MIDI</span>
+        </div>
+        <div class="guardline" id="midi-status" aria-live="polite">MIDI is off. Connect asks the browser for permission.</div>
+        <p class="hint">Default maps: CC74 → grain.density, CC71 → stutter.probability, note 36 (C1 in Live) held → punch the stutter. Learn: turn it on, click a slider, move a knob. If this embedded page is refused MIDI, open the HTML file directly in Chrome.</p>
+      </div>
+      <div class="row">
+        <label class="btn" for="img-file">Load image</label>
+        <input type="file" id="img-file" accept="image/*" class="visually-hidden">
+        <button class="btn" id="use-card" type="button" disabled>Use test card</button>
+        <span id="img-msg">Your image stays in this browser. Nothing is uploaded.</span>
+      </div>
+      <details class="json" id="json-panel">
+        <summary>Stack card · exportState()</summary>
+        <div class="json-body">
+          <p class="hint">This is the full lab state as JSON. Edit it and apply: it is validated against the card descriptors before it reaches runtime state, and invalid input is rejected with the field that failed. Try duplicating a stack entry with a new <code>id</code>. One effect can run twice.</p>
+          <label class="visually-hidden" for="state-json">Stack card JSON</label>
+          <textarea id="state-json" spellcheck="false"></textarea>
+          <div class="row">
+            <button class="btn primary" id="apply-json" type="button">Apply JSON</button>
+            <button class="btn" id="copy-json" type="button">Copy</button>
+            <button class="btn" id="reset-json" type="button">Reset to default</button>
+          </div>
+          <div id="json-msg" aria-live="polite"></div>
+        </div>
+      </details>
+    </div>
+    <aside class="rack" aria-label="Effect rack">
+      <div class="rack-h"><span class="tlabel">Effect stack · top runs first</span><span class="hint">generated from cards</span></div>
+      <div id="rack"></div>
+    </aside>
+  </div>
+</section>
+
+<!-- §1 REPO STATE -->
+<section class="sec" aria-labelledby="h-state">
+  <div class="sec-h"><span class="sid">§1</span><h2 id="h-state">What the repo has today</h2></div>
+  <div class="tbl"><table>
+    <thead><tr><th>Item</th><th>State</th><th>Note</th></tr></thead>
+    <tbody>
+      <tr><td class="k">README.md</td><td><span class="chip ok">present</span></td><td>Product spec: pipeline flow, stack table, 8 planned effects, MIDI via midi-gem. Status line reads <code>spec-complete → prototype-pending</code>.</td></tr>
+      <tr><td class="k">CONTRIBUTING.md</td><td><span class="chip ok">present</span></td><td>The strongest doc in the repo. GW-AAP lab edition: plugin contract, <code>exportState</code>/<code>loadState</code>, resource caps, graceful degradation, quality gates, submodule boundary.</td></tr>
+      <tr><td class="k">tasks.md</td><td><span class="chip ok">present</span></td><td>Six epics: CORE, FX, UI, EXPORT, MIDI, DEPLOY. No testing epic.</td></tr>
+      <tr><td class="k">dex-entry.md</td><td><span class="chip ok">present</span></td><td><code>dex_id: "TBD"</code>, status <code>spec-complete</code>, <code>urn:zenos:projects:glitchlab</code>.</td></tr>
+      <tr><td class="k">src/ schemas/ tests/ docs/ public/</td><td><span class="chip miss">missing</span></td><td>All listed as planned in CONTRIBUTING.</td></tr>
+      <tr><td class="k">package.json, CI</td><td><span class="chip miss">missing</span></td><td>The quality gates have nothing to run yet.</td></tr>
+      <tr><td class="k">LICENSE</td><td><span class="chip miss">missing</span></td><td>No license file in the zip.</td></tr>
+      <tr><td class="k">git history</td><td><span class="chip warn">not seen</span></td><td>The zip has no <code>.git</code>, so branches, PRs and commits are still unread. The GitHub URL was unreachable from this session earlier.</td></tr>
+    </tbody>
+  </table></div>
+  <h3>Gaps and contradictions</h3>
+  <ol class="list">
+    <li>Status says <code>spec-complete</code>, but the schemas it depends on (presets, stacks, MIDI maps) don't exist yet. Proposed status: <code>spec-draft</code> until the §4 schemas land.</li>
+    <li>The effect contract <code>apply(gl, state)</code> hands raw WebGL to every effect. That breaks the dumb-core rule and blocks a WebGPU or recording test backend. §3 proposes <code>plan()</code> instead.</li>
+    <li>CONTRIBUTING requires effect tests, schema validation and a shader compile gate, but tasks.md has no epic for the harness. §8 adds one and puts it first.</li>
+    <li>The effects in this spike (stutter, 3D RGB split, granular) aren't in the README list, and they are temporal. The pipeline doesn't model time yet: there's no clock, no frame history and no per-effect state.</li>
+    <li>Export determinism isn't specified. GIF/MP4 export and golden-image tests both need a seeded, fixed-timestep offline render.</li>
+    <li>The UI choice "Astro (or vanilla)" is still open (R7).</li>
+    <li>The links to GlitchWorks and midi-gem were not verified.</li>
+  </ol>
+</section>
+
+<!-- §2 VISION -->
+<section class="sec" aria-labelledby="h-vision">
+  <div class="sec-h"><span class="sid">§2</span><h2 id="h-vision">Vision: a signal chain for pixels</h2></div>
+  <div class="prose">
+    <p>GlitchLab treats an image the way a studio treats a signal. Each concept below already has a name and a feel on the audio side, so params, modulation and MIDI mapping can borrow that vocabulary instead of inventing one.</p>
+  </div>
+  <div class="tbl"><table>
+    <thead><tr><th>In the studio</th><th>In GlitchLab</th><th>Module</th></tr></thead>
+    <tbody>
+      <tr><td>Oscillator or sample</td><td>Image file, camera, URL or test card</td><td class="k">source</td></tr>
+      <tr><td>Beat repeat, Elektron-style retrig</td><td>Freeze a frame and re-fire it on the tempo grid</td><td class="k">stutter</td></tr>
+      <tr><td>Granular synthesis: grain size, density, spray, position</td><td>Image cut into grains that jump in space and back in time</td><td class="k">granular</td></tr>
+      <tr><td>Stereo width, Haas spread</td><td>R, G and B pushed onto separate depth planes</td><td class="k">rgb3d</td></tr>
+      <tr><td>Bitcrusher</td><td>Colour depth reduction</td><td class="k">bitcrush (planned)</td></tr>
+      <tr><td>Tape, console and tube colour</td><td>Scanlines, aperture mask, barrel curvature, vignette</td><td class="k">scanlines</td></tr>
+      <tr><td>LFO, sample &amp; hold</td><td>Modulators routed to any numeric param</td><td class="k">modulators</td></tr>
+      <tr><td>Clock, MIDI clock at 24 ppqn</td><td>Transport: BPM, division, seed</td><td class="k">transport</td></tr>
+      <tr><td>CC knobs</td><td>MIDI map card: CC → param address</td><td class="k">midi-map</td></tr>
+    </tbody>
+  </table></div>
+  <p class="small muted">v0 non-goals: accounts or cloud sync, server-side rendering, audio-reactive input, a WebGPU backend, user-written GLSL in production builds.</p>
+</section>
+
+<!-- §3 ARCHITECTURE -->
+<section class="sec" aria-labelledby="h-arch">
+  <div class="sec-h"><span class="sid">§3</span><h2 id="h-arch">Architecture</h2></div>
+  <div class="prose"><p>Dependencies only point down. The core never imports a GL type, effects never touch the GL context, and surfaces never write runtime state directly. They send events, and the core returns snapshots.</p></div>
+  <div class="tbl"><table>
+    <thead><tr><th>Layer</th><th>Owns</th><th>Can see</th><th>Never sees</th></tr></thead>
+    <tbody>
+      <tr><td class="lv">L0</td><td><b>Cards</b>: effect cards, stack card, modulators, MIDI map, safety policy, plus their JSON Schemas</td><td>nothing</td><td>code</td></tr>
+      <tr><td class="lv">L1</td><td><b>Core</b>, pure TS: registry, transport, modulation, param resolve and clamp, safety policy, FramePlan, <code>exportState</code>/<code>loadState</code>, validation, MIDI parser, clock follower, map resolver</td><td>L0</td><td>DOM, GL, wall clock (time is injected)</td></tr>
+      <tr><td class="lv">L2</td><td><b>Render backend</b>: GL context, targets, ping-pong, frame history, state targets, context-loss rebuild</td><td>FramePlan, shader sources</td><td>stack semantics, UI</td></tr>
+      <tr><td class="lv">L3</td><td><b>IO</b>: sources (file, camera, URL, test card), sinks (canvas, PNG/WebP, GIF, MP4), offline renderer, MIDI ports (Web MIDI, null, fixture replay, later a native bridge)</td><td>L1 and L2 interfaces</td><td>effect internals</td></tr>
+      <tr><td class="lv">L4</td><td><b>Surfaces</b>: rack UI generated from param descriptors, MIDI input, telemetry sink</td><td>events in, snapshots out</td><td>GL, effect code</td></tr>
+    </tbody>
+  </table></div>
+  <h3>Frame tick</h3>
+  <ol class="tick">
+    <li><span class="n">1</span><span><code>transport.tick(dt)</code> → t, step, beat</span><span class="chip pure">pure</span></li>
+    <li><span class="n">2</span><span><code>modulators.sample(t)</code> → bipolar values</span><span class="chip pure">pure</span></li>
+    <li><span class="n">3</span><span><code>resolve(stack, routes, mods)</code> → params clamped to their descriptors</span><span class="chip pure">pure</span></li>
+    <li><span class="n">4</span><span><code>safety.apply(params, policy)</code> → capped params and guard notes</span><span class="chip pure">pure</span></li>
+    <li><span class="n">5</span><span><code>effect.plan(params, ctx)</code> → passes, uniforms, state ops</span><span class="chip pure">pure</span></li>
+    <li><span class="n">6</span><span><code>backend.run(framePlan)</code> → ingest, ping-pong, history ring, state targets</span><span class="chip gpu">gpu</span></li>
+    <li><span class="n">7</span><span><code>sink.present()</code> or <code>sink.record()</code></span><span class="chip io">io</span></li>
+  </ol>
+  <div class="prose"><p>Steps 1 to 5 produce a FramePlan, which is a plain JSON object. That gives snapshot tests of the whole stack without a GPU, and a backend that only executes plans. The spike runs this exact loop. Its effects are inline JS objects where the real ones would be one module per effect.</p></div>
+  <pre><span class="c">// proposed: replaces apply(gl, state) from CONTRIBUTING §2.3</span>
+interface EffectModule {
+  card: EffectCard;                                   <span class="c">// JSON, validated by schemas/effect-card.schema.json</span>
+  plan(p: ResolvedParams, ctx: FrameCtx): EffectPlan; <span class="c">// pure, no GL</span>
+}
+interface EffectPlan {
+  passes: PassSpec[];        <span class="c">// shader ref + uniforms + inputs</span>
+  stateOps?: StateOp[];      <span class="c">// e.g. { op: "capture", from: "input", to: "hold" }</span>
+}
+interface RenderBackend {
+  run(plan: FramePlan): void;
+  capabilities(): BackendCaps; <span class="c">// max texture, history frames, float targets</span>
+  dispose(): void;
+}</pre>
+</section>
+
+<!-- §4 CONTRACTS -->
+<section class="sec" aria-labelledby="h-cards">
+  <div class="sec-h"><span class="sid">§4</span><h2 id="h-cards">Card contracts</h2></div>
+  <div class="prose"><p>Params are addressed as <code>&lt;instanceId&gt;.&lt;paramKey&gt;</code>. Instance ids let one effect sit in the stack twice and keep MIDI maps and mod routes stable when the stack is reordered. Descriptor fields: <code>type</code> (number, int, enum, bool), <code>min</code>, <code>max</code>, <code>step</code>, <code>default</code>, <code>curve</code> (linear, exp), <code>flags</code> (e.g. <code>flash-risk</code>), <code>midi</code>.</p></div>
+  <div class="codegrid">
+    <div><span class="cap">src/effects/stutter/stutter.card.json</span>
+<pre>{
+  "$schema": "../../../schemas/effect-card.schema.json",
+  "id": "stutter",
+  "version": "0.1.0",
+  "kind": "temporal",
+  "label": "Stutter gate",
+  "shader": "./stutter.frag.glsl",
+  "reads": ["input"],
+  "state": [{ "id": "hold", "type": "frame" }],
+  "params": [
+    { "key": "division", "type": "enum",
+      "options": ["1/4", "1/8", "1/16", "1/32"],
+      "default": "1/8", "midi": true },
+    { "key": "probability", "type": "number",
+      "min": 0, "max": 1, "default": 0.5, "midi": true },
+    { "key": "chop", "type": "number",
+      "min": 0, "max": 1, "default": 0.45,
+      "flags": ["flash-risk"] }
+  ]
+}</pre></div>
+    <div><span class="cap">presets/default.stack.json</span>
+<pre>{
+  "$schema": "../schemas/stack.schema.json",
+  "version": 1,
+  "transport": { "bpm": 122, "seed": 7, "clock": "internal" },
+  "safety": { "$ref": "safety-policy.default.json" },
+  "modulators": [
+    { "id": "lfo1", "type": "lfo", "division": "1/1" },
+    { "id": "sh1",  "type": "sh",  "division": "1/8" }
+  ],
+  "stack": [
+    { "id": "stutter", "effect": "stutter",   "enabled": true, "params": {} },
+    { "id": "split",   "effect": "rgb3d",     "enabled": true, "params": {} },
+    { "id": "grain",   "effect": "granular",  "enabled": true, "params": {} },
+    { "id": "crt",     "effect": "scanlines", "enabled": true, "params": {} }
+  ],
+  "routes": [
+    { "from": "lfo1", "to": "split.depth",   "amount": 0.25 },
+    { "from": "sh1",  "to": "grain.density", "amount": 0.15 }
+  ]
+}</pre></div>
+    <div><span class="cap">maps/default.midi-map.json</span>
+<pre>{
+  "$schema": "../schemas/midi-map.schema.json",
+  "version": 1,
+  "clock":  { "source": "midi", "input": "IAC Driver Sync", "offsetMs": 0 },
+  "input":  { "port": "IAC Driver Live→GL", "channel": "any" },
+  "output": { "port": "IAC Driver GL→Live", "echo": true,
+              "modulators": ["lfo1"] },
+  "pickup": "soft-takeover",
+  "maps": [
+    { "type": "cc",   "cc": 74,  "to": "grain.density" },
+    { "type": "cc14", "cc": 1,   "to": "split.depth" },
+    { "type": "nrpn", "param": 512, "to": "crt.curvature" },
+    { "type": "bend", "to": "split.twist" },
+    { "type": "note", "note": 36, "action": "punch",  "to": "stutter" },
+    { "type": "note", "note": 38, "action": "retrig", "to": "stutter",
+      "division": "1/16", "velocity": "stutter.chop" },
+    { "type": "pc",   "action": "preset",
+      "presets": ["default", "vhs-melt", "rgb-tunnel"] }
+  ],
+  "unmapped": "ignore"
+}</pre></div>
+    <div><span class="cap">policy/safety-policy.default.json</span>
+<pre>{
+  "$schema": "../schemas/safety-policy.schema.json",
+  "flash": { "guard": true, "maxPerSecond": 3, "mode": "cap" },
+  "caps": {
+    "maxStackDepth": 16,
+    "historyFrames": 16,
+    "maxImageDimension": 8192,
+    "maxTemporalExportHeight": 720,
+    "maxExportSeconds": 30
+  }
+}</pre></div>
+  </div>
+</section>
+
+<!-- §5 EFFECTS -->
+<section class="sec" aria-labelledby="h-fx">
+  <div class="sec-h"><span class="sid">§5</span><h2 id="h-fx">The four effects in the spike</h2></div>
+  <div class="fx-grid">
+    <article class="fx">
+      <div class="fx-top"><h3>Stutter gate</h3><span class="chip temporal">temporal</span><span class="chip warn">flash-risk</span></div>
+      <p>The scheduler cuts time into steps of the chosen division, and each step rolls a seeded chance. On a hit the effect captures its input at the step start, holds it for the gate length and re-fires it <code>repeats</code> times. Each repeat is chopped dark for its last ~40%. Later repeats slip sideways with a tear band, like tape catching. A held MIDI note punches it in regardless of chance, like Beat Repeat on a pad.</p>
+      <dl><dt>Params</dt><dd>rate 1/4–1/32 · chance · gate · repeats 1–8 · chop · slip</dd><dt>State</dt><dd>one hold frame per instance</dd><dt>Cost</dt><dd>1 tap per frame, 1 copy per triggered step</dd><dt>Risk</dt><dd>Chop at high retrigger rates is a flash source. The guard caps it.</dd></dl>
+    </article>
+    <article class="fx">
+      <div class="fx-top"><h3>3D RGB layer split</h3><span class="chip spatial">spatial</span></div>
+      <p>Each channel sits on its own depth plane: R behind, G at the screen, B in front. Per plane: perspective scale from depth, keystone from tilt, rotation from twist, and parallax along an axis that orbits on the bar clock. Off-plane pixels go black, so the layer edges show. Plain chromatic aberration is this effect at zero depth and twist.</p>
+      <dl><dt>Params</dt><dd>depth · spread · twist · tilt · orbit · mix</dd><dt>Cost</dt><dd>3 taps</dd><dt>Risk</dt><dd>Low</dd></dl>
+    </article>
+    <article class="fx">
+      <div class="fx-top"><h3>Granular artifacts</h3><span class="chip temporal">temporal</span></div>
+      <p>The frame is cut into square grains. Every reseed tick (a synced division) a seeded hash picks which grains fire. A firing grain samples from an offset position (spray) or from an older frame in the history ring (time spray), and its colour gets crushed. Film grain sits on top.</p>
+      <dl><dt>Params</dt><dd>size 4–64 px · density · spray · time spray · crush · reseed · grain</dd><dt>Cost</dt><dd>1–2 taps</dd><dt>Memory</dt><dd>History is N × W × H × 4 bytes: 16 frames is 59 MB at 720p and 133 MB at 1080p. Needs a cap (§7).</dd></dl>
+    </article>
+    <article class="fx">
+      <div class="fx-top"><h3>Scanlines / CRT</h3><span class="chip spatial">spatial</span><span class="chip warn">flash-risk</span></div>
+      <p>Barrel curvature, scanlines with roll, an RGB aperture-grille mask, vignette, and per-frame flicker.</p>
+      <dl><dt>Params</dt><dd>lines 60–450 · intensity · roll · curvature · mask · vignette · flicker</dd><dt>Cost</dt><dd>1 tap</dd><dt>Risk</dt><dd>Flicker changes luminance every frame, so the guard caps it.</dd></dl>
+    </article>
+  </div>
+  <p class="small muted">Not in the spike: pixel sort (needs a GPU multi-pass sort or a CPU worker, so it gets its own spike), displacement, databend, bloom, custom GLSL.</p>
+</section>
+
+<!-- §6 MIDI -->
+<section class="sec" aria-labelledby="h-midi">
+  <div class="sec-h"><span class="sid">§6</span><h2 id="h-midi">MIDI and Ableton Live</h2></div>
+  <div class="prose">
+    <p>Chrome's Web MIDI gives the page real ports: every MIDI input and output the OS exposes, hot-plug events, and high-resolution event timestamps on the same clock as <code>performance.now()</code>. Outputs also accept a future timestamp, so sends can be scheduled ahead. That's enough to make GlitchLab an instrument inside a Live set. It can follow Live's clock, be played from clips and automation, and send its own knob moves back.</p>
+  </div>
+  <h3>Platform facts that shape the design</h3>
+  <div class="tbl"><table>
+    <thead><tr><th>Fact</th><th>Consequence</th></tr></thead>
+    <tbody>
+      <tr><td>Since Chrome 124 every <code>requestMIDIAccess()</code> call sits behind a permission prompt; a refusal throws <code>SecurityError</code>. SysEx is a separate, stronger ask.</td><td>A "Connect MIDI" button asks on a click, never on load. Refusal leaves the preview running with a clear message. v0 never asks for SysEx.</td></tr>
+      <tr><td>Firefox needs a site permission too. Safari has no Web MIDI (WebKit bug 107250 is still open).</td><td><code>NullMidiPort</code> on Safari: full visuals, MIDI controls disabled with an explanation.</td></tr>
+      <tr><td>Web MIDI needs a secure context, and an iframe only gets MIDI if its embedder allows it.</td><td>glitchlab.live is served over HTTPS. Embeds need <code>allow="midi"</code>. The artifact viewer may refuse it, which the spike reports.</td></tr>
+      <tr><td>Web MIDI carries MIDI 1.0 bytes. There's no MIDI 2.0 / UMP in the API.</td><td>The dex entry's MIDI 2.0 property-exchange id stays metadata until a native bridge exists (R15).</td></tr>
+      <tr><td>Browsers can't join Ableton Link sessions, because Link needs UDP multicast on the LAN.</td><td>Link only via a native helper bridged over WebSocket; midi-gem is the natural home (R14).</td></tr>
+    </tbody>
+  </table></div>
+  <h3>Four ways to wire it to Live</h3>
+  <div class="tbl"><table>
+    <thead><tr><th>Mode</th><th>Live setup</th><th>GlitchLab side</th><th>When</th></tr></thead>
+    <tbody>
+      <tr><td><b>Follow Live's clock</b><br><span class="muted small">Live → GL</span></td><td>Preferences → Link, Tempo &amp; MIDI: turn on <b>Sync</b> for the output port that feeds GlitchLab. Set Clock Type to <b>Song</b> so Live adds Song Position Pointer. Use a port that carries only sync, as Ableton recommends.</td><td>Clock follower: <code>F8</code> ticks at 24 ppqn, <code>FA</code>/<code>FB</code>/<code>FC</code> start/continue/stop, <code>F2</code> SPP in 16ths. The tick count is the authority for position; tempo is estimated from tick timestamps and only used to interpolate between ticks.</td><td><span class="chip ok">in spike</span></td></tr>
+      <tr><td><b>Live plays GlitchLab</b><br><span class="muted small">Live → GL</span></td><td>A MIDI track with its output set to the virtual port. Clip notes and CC envelopes drive GlitchLab.</td><td>MIDI map card: notes → triggers (punch, retrig, scene), velocity → amount, CC / 14-bit CC / NRPN / pitch bend → params, program change → preset recall.</td><td><span class="chip ok">CC + punch in spike</span></td></tr>
+      <tr><td><b>GlitchLab plays Live</b><br><span class="muted small">GL → Live</span></td><td>A MIDI track armed on the return port records CC as automation. Or turn on <b>Remote</b> for that port and map GlitchLab knobs onto Live params in MIDI Map Mode.</td><td>Output echo of knob moves and modulator values as CC; LED feedback to controllers; MIDI learn in both directions.</td><td><span class="chip ok">CC echo in spike</span></td></tr>
+      <tr><td><b>GlitchLab as clock master</b><br><span class="muted small">GL → Live</span></td><td>Live's sync source set to the GlitchLab port (Sync on the input).</td><td>Lookahead scheduler sending <code>F8</code> with <code>output.send(bytes, timestamp)</code>, the same pattern as Web Audio schedulers.</td><td><span class="chip warn">MIDI epic</span></td></tr>
+    </tbody>
+  </table></div>
+  <div class="prose">
+    <p><b>Virtual ports.</b> GlitchLab and Live talk through OS loopback ports. On macOS that's the built-in IAC Driver (Audio MIDI Setup, add buses). Windows and Linux need their own loopback setup; docs/MIDI.md will give per-OS steps once each one is tested. Use three buses: one for sync, one Live → GL, and one GL → Live. Echoing on the same bus you listen on makes a loop.</p>
+    <p><b>Timing.</b> Clock math uses each message's event timestamp, never its arrival time. Position is re-anchored on every tick, so tempo estimation can't drift. Video lags audio by a frame or two plus display latency, so <code>midi.offsetMs</code> nudges visuals ahead or behind, like Live's own MIDI Clock Sync Delay.</p>
+    <p><b>Safety still applies.</b> MIDI writes base param values, which then go through resolve and the flash guard like everything else. A pad hammering retrig at 1/32 still gets capped. Unmapped messages are ignored, and bursts are coalesced to the latest value per param per frame.</p>
+  </div>
+  <div class="codegrid">
+    <div><span class="cap">src/core/midi/ (pure, takes timestamps as input)</span>
+<pre>parse(bytes, ts)       <span class="c">→ MidiEvent (clock|start|cont|stop|spp|cc|note|pc|bend)</span>
+clock.follow(ev)       <span class="c">→ ticks, running, tempo estimate</span>
+clock.position(now)    <span class="c">→ beats, interpolated, never past next tick</span>
+map.resolve(ev, card)  <span class="c">→ ParamWrite[] | Trigger[]</span>
+                       <span class="c">  14-bit pairing, NRPN state, curves, pickup</span>
+learn(armed, ev)       <span class="c">→ new map entry for the card</span></pre></div>
+    <div><span class="cap">src/io/midi/ (adapters behind one interface)</span>
+<pre>interface MidiPort {
+  inputs(): PortInfo[];  outputs(): PortInfo[];
+  onMessage(cb: (bytes, ts, portId) =&gt; void): Unsub;
+  send(portId, bytes, atTs?): void;
+  onStateChange(cb): Unsub;
+}
+WebMidiPort      <span class="c">// Chrome, Edge, Firefox</span>
+NullMidiPort     <span class="c">// Safari, refused permission</span>
+FixturePort      <span class="c">// replays recorded [ts, bytes] JSON in tests</span>
+BridgePort       <span class="c">// later: WebSocket to a native helper</span></pre></div>
+  </div>
+</section>
+
+<!-- §7 SAFETY -->
+<section class="sec" aria-labelledby="h-safety">
+  <div class="sec-h"><span class="sid">§7</span><h2 id="h-safety">Safety and caps</h2></div>
+  <div class="tbl"><table>
+    <thead><tr><th>Concern</th><th>v0 rule</th><th>Later</th></tr></thead>
+    <tbody>
+      <tr><td>Photosensitivity</td><td>WCAG 2.3.1 puts the line at three flashes per second. The safety policy is a core layer and on by default. If a <code>flash-risk</code> param alternates faster than the policy limit, it is capped (chop to 0.10, flicker to 0.08). Turning the guard off takes an explicit toggle and shows a warning. The spike does this.</td><td>Measured guard: reduce each output frame to mean luminance (mip or reduction pass, 1×1 readback) and limit frame-to-frame change.</td></tr>
+      <tr><td>GPU memory</td><td>History ring at preview resolution, 16 frames max by policy. Temporal effects export at 720p or below.</td><td>Raise caps when the backend reports headroom.</td></tr>
+      <tr><td>Hostile input</td><td>Reject images above the policy dimension cap or <code>MAX_TEXTURE_SIZE</code> before upload. Stack depth ≤ 16. Preset JSON is validated before <code>loadState</code>. The spike validates image size and JSON.</td><td>Fuzz the validators with the invalid fixtures.</td></tr>
+      <tr><td>MIDI input</td><td>MIDI sets base values, which still pass resolve and the flash guard. Unmapped messages are ignored, bursts are coalesced per frame, SysEx is never requested, and echo never re-sends a value that came in over MIDI.</td><td>Per-port rate caps if a controller floods.</td></tr>
+      <tr><td>Context loss</td><td>Handle <code>webglcontextlost</code>/<code>restored</code> and rebuild from <code>exportState()</code>. Because state is JSON, recovery is just replaying the plan. The spike does this.</td><td>The same path covers backend swaps.</td></tr>
+      <tr><td>Custom GLSL</td><td>Behind an opt-in danger flag, dev builds only.</td><td>WebGL has no shader timeout, so a hostile loop only ends in context loss. Decide before shipping it.</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<!-- §8 TESTING -->
+<section class="sec" aria-labelledby="h-test">
+  <div class="sec-h"><span class="sid">§8</span><h2 id="h-test">Test harness, before code</h2></div>
+  <div class="prose"><p>Determinism rule: effects never call <code>Math.random</code>. All randomness is <code>hash(seed, frame, cell)</code>, and exports and goldens render at a fixed timestep. With that rule, one seed plus one frame index gives one exact image.</p></div>
+  <div class="tbl"><table>
+    <thead><tr><th>Layer</th><th>Runner</th><th>Covers</th></tr></thead>
+    <tbody>
+      <tr><td>Schemas</td><td class="k">vitest + ajv</td><td>Valid and invalid fixtures for every card type. CI fails on drift.</td></tr>
+      <tr><td>Core</td><td class="k">vitest (node)</td><td>Resolver clamps, mod routing, scheduler grid tables, safety caps, <code>exportState → loadState</code> round-trip, empty stack.</td></tr>
+      <tr><td>FramePlan</td><td class="k">vitest snapshots</td><td>Seed + fixed dt → FramePlan JSON for N frames, with no GPU involved.</td></tr>
+      <tr><td>Shader compile</td><td class="k">Playwright, headless Chromium</td><td>Compile and link every effect shader on WebGL2 (SwiftShader).</td></tr>
+      <tr><td>Golden images</td><td class="k">Playwright + pixelmatch</td><td>Fixture image + preset + seed + frame → PNG compare with tolerance. Pin the Chromium version, because SwiftShader output differs from GPU output.</td></tr>
+      <tr><td>MIDI core</td><td class="k">vitest + FixturePort</td><td>Recorded <code>[ts, bytes]</code> streams: 24 ticks at 20.833 ms read as 120 BPM, ±2 ms jitter stays within tolerance, start/continue/stop, SPP jumps, 14-bit CC pairing, NRPN sequences, soft takeover, learn output.</td></tr>
+      <tr><td>MIDI in browser</td><td class="k">Playwright, stubbed requestMIDIAccess</td><td>Refused permission gives a message and keeps the preview alive. Hot-plug updates port lists. Clock drives the step grid. CC moves sliders. Echo sends the right bytes.</td></tr>
+      <tr><td>Live check</td><td class="k">manual, docs/MIDI.md</td><td>A short checklist against a real Live set per OS: sync lock, punch on a clip, automation recorded from echo.</td></tr>
+      <tr><td>Degradation</td><td class="k">Playwright</td><td>No WebGL2 gives a structured error. No WebMIDI disables the MIDI feature and keeps the preview running.</td></tr>
+    </tbody>
+  </table></div>
+  <span class="cap">tests/core/transport.test.ts (first red test)</span>
+<pre>it.each([
+  <span class="c">// bpm  division  t      step  phase</span>
+  [120, "1/8",   0.26,  1,    0.04],
+  [120, "1/16",  1.00,  8,    0.00],
+  [ 90, "1/4",   1.00,  1,    0.50],
+])("grid %i bpm %s at %fs", (bpm, div, t, step, phase) =&gt; {
+  const g = grid(bpm, div, t);
+  expect(g.step).toBe(step);
+  expect(g.phase).toBeCloseTo(phase, 6);
+});</pre>
+</section>
+
+<!-- §9 INIT RITUAL -->
+<section class="sec" aria-labelledby="h-init">
+  <div class="sec-h"><span class="sid">§9</span><h2 id="h-init">Init ritual: proposed diff</h2><span class="chip warn">not committed</span></div>
+<pre>GlitchLab/
+├── docs/
+│   ├── VISION.md                 <span class="c">§2</span>
+│   ├── ARCHITECTURE.md           <span class="c">§3 layers + frame tick</span>
+│   ├── EFFECT-CARD.md            <span class="c">§4 descriptor reference</span>
+│   ├── MIDI.md                   <span class="c">§6 + per-OS Live setup checklist</span>
+│   ├── SAFETY.md                 <span class="c">§7</span>
+│   ├── TESTING.md                <span class="c">§8</span>
+│   └── adr/
+│       ├── 0001-effects-emit-plans.md
+│       └── 0002-instance-ids-and-param-addresses.md
+├── schemas/
+│   ├── effect-card.schema.json
+│   ├── stack.schema.json
+│   ├── midi-map.schema.json
+│   └── safety-policy.schema.json
+├── tests/fixtures/
+│   ├── valid/                    <span class="c">default.stack.json, minimal.midi-map.json …</span>
+│   ├── invalid/                  <span class="c">unknown-effect.json, param-out-of-range.json …</span>
+│   └── midi/                     <span class="c">live-120bpm-clock.json, spp-jump.json, cc14-sweep.json …</span>
+├── README.md                     <span class="c">effects list + status → spec-draft</span>
+├── tasks.md                      <span class="c">+ TEST-001, FX-002 (temporal), SAFETY-001, MIDI-001 rewritten</span>
+└── LICENSE                       <span class="c">waiting on R9</span></pre>
+  <h3>PR sequence</h3>
+  <ol class="list">
+    <li>Docs, schemas and fixtures. No code.</li>
+    <li>Harness: vitest, ajv and Playwright config, with failing tests for the core contracts.</li>
+    <li>Core in pure TS until those tests pass, including the MIDI parser and clock follower.</li>
+    <li>WebGL2 backend with ingest and copy passes, plus the shader compile gate.</li>
+    <li>Effects, one per PR: CRT, then 3D split, then stutter, then granular.</li>
+    <li>Rack UI with WebMidiPort, MIDI learn and echo, then export.</li>
+  </ol>
+  <span class="cap">tasks.md · rewritten MIDI epic</span>
+<pre>## Epic: GLITCHLAB-MIDI-001 — MIDI + DAW integration
+- [ ] core/midi parser + recorded fixtures (clock, SPP, CC, CC14, NRPN, notes, PC, bend)
+- [ ] clock follower: tick-authoritative position, tempo estimate, offsetMs
+- [ ] midi-map card schema + MIDI learn that writes the card
+- [ ] note triggers: punch, retrig with division, velocity → amount, preset scenes via PC
+- [ ] output: CC echo, modulators → CC, soft takeover / pickup for incoming CC
+- [ ] adapters: WebMidiPort, NullMidiPort, FixturePort
+- [ ] permission UX: connect on click, SecurityError message, Safari fallback
+- [ ] docs/MIDI.md: Live setup per OS (virtual buses, Sync, Clock Type Song, Remote)
+- [ ] clock master: lookahead scheduler sending F8 with timestamps
+- [ ] later: BridgePort for Ableton Link and MIDI 2.0 (native helper)</pre>
+</section>
+
+<!-- §10 ROAST QUEUE -->
+<section class="sec" aria-labelledby="h-roast">
+  <div class="sec-h"><span class="sid">§10</span><h2 id="h-roast">Roast queue</h2></div>
+  <div class="tbl"><table>
+    <thead><tr><th>ID</th><th>Decision</th><th>Recommendation</th><th>Why</th></tr></thead>
+    <tbody>
+      <tr><td class="k">R1</td><td>Effect contract</td><td><code>plan(params, ctx) → EffectPlan</code>; the backend owns GL</td><td>Effects become pure and testable without a GPU, and a WebGPU or recording backend can drop in. Replaces <code>apply(gl, state)</code>.</td></tr>
+      <tr><td class="k">R2</td><td>Instance ids</td><td>Every stack entry gets an <code>id</code>; params are addressed as <code>id.key</code></td><td>One effect can run twice, and maps and routes survive a reorder.</td></tr>
+      <tr><td class="k">R3</td><td>Where shaders live</td><td>File ref in the card, bundled at build; the card stores a content hash</td><td>Keeps GLSL out of JSON strings and lets the schema test catch a stale card.</td></tr>
+      <tr><td class="k">R4</td><td>Chromatic aberration</td><td>Merge into 3D RGB split as a preset (depth 0, twist 0)</td><td>One code path and one set of tests.</td></tr>
+      <tr><td class="k">R5</td><td>Clock source</td><td>Internal BPM in v0, MIDI clock (24 ppqn) in the MIDI epic, audio onset later</td><td>The scheduler takes time and BPM as inputs, so the source can change without touching effects.</td></tr>
+      <tr><td class="k">R6</td><td>Frame history</td><td>Preview resolution, 16 frames max; temporal export ≤ 720p in v0</td><td>16 frames at 1080p is 133 MB of GPU memory.</td></tr>
+      <tr><td class="k">R7</td><td>UI shell</td><td>Vanilla TS + custom elements for the lab; Astro only if glitchlab.live grows content pages</td><td>The lab is one live canvas app, so Astro's island boundary buys little here.</td></tr>
+      <tr><td class="k">R8</td><td>Flash guard</td><td>Heuristic caps in v0, measured guard in v1, on by default</td><td>Ships the safety rule now and keeps the claim honest.</td></tr>
+      <tr><td class="k">R9</td><td>License</td><td>Your pick</td><td>There's no LICENSE in the zip, and it's needed before glitchlab.live goes public.</td></tr>
+      <tr><td class="k">R10</td><td>Pixel sort</td><td>Separate spike: GPU odd-even multipass vs CPU worker</td><td>Its cost profile is unlike every other effect here.</td></tr>
+      <tr><td class="k">R11</td><td>Status</td><td>Set README and dex status to <code>spec-draft</code> until schemas land</td><td><code>spec-complete</code> overstates where the repo is today.</td></tr>
+      <tr><td class="k">R12</td><td>Clock authority</td><td>Tick count re-anchors position every tick; the tempo estimate only interpolates between ticks</td><td>No drift. A PLL can come later if visuals look steppy at slow tempos.</td></tr>
+      <tr><td class="k">R13</td><td>Bus layout</td><td>Three buses: sync, Live → GL, GL → Live; documented per OS in docs/MIDI.md</td><td>Follows Ableton's advice to keep sync on its own port and avoids echo loops.</td></tr>
+      <tr><td class="k">R14</td><td>Ableton Link</td><td>Out of v0. Later via a native helper bridged over WebSocket</td><td>Browsers can't open the UDP multicast Link needs.</td></tr>
+      <tr><td class="k">R15</td><td>SysEx and MIDI 2.0</td><td>Off in v0; the dex MIDI 2.0 id stays metadata</td><td>SysEx is a stronger permission, and Web MIDI has no UMP.</td></tr>
+      <tr><td class="k">R16</td><td>Incoming CC pickup</td><td>Soft takeover by default, jump as an option per map</td><td>Stops a knob that's out of position from snapping a param.</td></tr>
+      <tr><td class="k">R17</td><td>Note actions</td><td>punch (hold), retrig (division), scene (preset); velocity can scale one param</td><td>Covers pad play from Live clips without a scripting layer.</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<footer>"Unacceptable conditions will be glitched into submission — safely, with schemas and exportable state." · from CONTRIBUTING.md</footer>
+</div>
+
+<script>
+(() => {
+'use strict';
+
+/* ================= POLICY (no literals in effect logic) ================= */
+const POLICY = {
+  render: { width: 800, height: 450, historyFrames: 12 },
+  flash: { maxPerSecond: 3 },
+  caps: { maxStack: 16, maxImageDim: 8192, maxImageBytes: 20 * 1024 * 1024 },
+  storageKey: 'glitchlab.spike.state.v1'
+};
+const DIVS = { '1/1': 1, '1/2': 0.5, '1/4': 0.25, '1/8': 0.125, '1/16': 0.0625, '1/32': 0.03125 };
+const TAU = Math.PI * 2;
+
+/* ================= L1 CORE helpers (pure) ================= */
+function hash1(n) { const s = Math.sin(n * 127.1 + 311.7) * 43758.5453; return s - Math.floor(s); }
+function stepLength(bpm, div) { return (60 / bpm) * 4 * DIVS[div]; }
+function grid(bpm, div, t) { const len = stepLength(bpm, div); const x = t / len; const step = Math.floor(x); return { len, step, phase: x - step }; }
+
+function stutterSchedule(t, bpm, p, seed, punch) {
+  const g = grid(bpm, p.division, t);
+  const gate = punch ? 1 : p.gate;
+  const active = punch || hash1(g.step * 1.731 + seed * 17.3) < p.probability;
+  const holding = active && g.phase < gate;
+  const out = { step: g.step, holding, gain: 1, slipX: 0, slipY: 0, tearY: -1 };
+  if (holding) {
+    const q = (g.phase / gate) * p.repeats;
+    const sub = Math.floor(q), sp = q - sub;
+    out.gain = sp < 0.6 ? 1 : 1 - p.chop;
+    if (sub > 0) {
+      out.slipX = (hash1(g.step * 3.1 + sub * 7.7 + seed) - 0.5) * p.slip * 0.14;
+      out.slipY = (hash1(g.step * 5.3 + sub * 1.9 + seed) - 0.5) * p.slip * 0.025;
+      out.tearY = hash1(g.step * 9.1 + sub * 2.3 + seed);
+    }
+  }
+  return out;
+}
+
+/* ================= L0 CARDS (descriptors + shaders) ================= */
+const VERT = `#version 300 es
+const vec2 P[3] = vec2[3](vec2(-1.0,-1.0), vec2(3.0,-1.0), vec2(-1.0,3.0));
+out vec2 vUv;
+void main(){ vec2 p = P[gl_VertexID]; vUv = p*0.5+0.5; gl_Position = vec4(p,0.0,1.0); }`;
+
+const COPY_FRAG = `#version 300 es
+precision highp float;
+in vec2 vUv; out vec4 o;
+uniform sampler2D uIn; uniform float uFlip;
+void main(){ vec2 uv = vUv; if (uFlip > 0.5) uv.y = 1.0 - uv.y; o = vec4(texture(uIn, uv).rgb, 1.0); }`;
+
+const CARDS = {
+  stutter: {
+    id: 'stutter', label: 'Stutter gate', kind: 'temporal', state: ['hold'],
+    params: [
+      { key: 'division', label: 'Rate', type: 'enum', options: ['1/4', '1/8', '1/16', '1/32'], default: '1/8' },
+      { key: 'probability', label: 'Chance', type: 'number', min: 0, max: 1, step: 0.01, default: 0.5 },
+      { key: 'gate', label: 'Gate', type: 'number', min: 0.1, max: 1, step: 0.01, default: 0.8 },
+      { key: 'repeats', label: 'Repeats', type: 'int', min: 1, max: 8, step: 1, default: 3 },
+      { key: 'chop', label: 'Chop depth', type: 'number', min: 0, max: 1, step: 0.01, default: 0.45, flags: ['flash-risk'], guardCap: 0.1 },
+      { key: 'slip', label: 'Tape slip', type: 'number', min: 0, max: 1, step: 0.01, default: 0.4 }
+    ],
+    flashRate(p, bpm) { return p.repeats / (stepLength(bpm, p.division) * p.gate); },
+    plan(p, ctx) {
+      const s = stutterSchedule(ctx.t, ctx.bpm, p, ctx.seed, !!ctx.punch);
+      let capture = false;
+      if (s.holding && ctx.rt.capturedStep !== s.step) { capture = true; ctx.rt.capturedStep = s.step; }
+      return { capture, holding: s.holding, uniforms: { uHolding: s.holding ? 1 : 0, uGain: s.gain, uSlipX: s.slipX, uSlipY: s.slipY, uTearY: s.tearY } };
+    },
+    frag: `#version 300 es
+precision highp float;
+in vec2 vUv; out vec4 o;
+uniform sampler2D uIn; uniform sampler2D uHold;
+uniform float uHolding, uGain, uSlipX, uSlipY, uTearY;
+void main(){
+  if (uHolding < 0.5) { o = vec4(texture(uIn, vUv).rgb, 1.0); return; }
+  vec2 uv = vUv + vec2(uSlipX, uSlipY);
+  if (uTearY >= 0.0 && abs(vUv.y - uTearY) < 0.035) uv.x += uSlipX * 3.0 + 0.02;
+  vec3 c = texture(uHold, fract(uv)).rgb;
+  o = vec4(c * uGain, 1.0);
+}`
+  },
+  rgb3d: {
+    id: 'rgb3d', label: '3D RGB split', kind: 'spatial', state: [],
+    params: [
+      { key: 'depth', label: 'Depth', type: 'number', min: 0, max: 1, step: 0.01, default: 0.45 },
+      { key: 'spread', label: 'Spread', type: 'number', min: 0, max: 1, step: 0.01, default: 0.4 },
+      { key: 'twist', label: 'Twist', type: 'number', min: -1, max: 1, step: 0.01, default: 0.2 },
+      { key: 'tilt', label: 'Tilt', type: 'number', min: -1, max: 1, step: 0.01, default: 0.3 },
+      { key: 'orbit', label: 'Orbit', type: 'number', min: 0, max: 1, step: 0.01, default: 0.25 },
+      { key: 'mix', label: 'Mix', type: 'number', min: 0, max: 1, step: 0.01, default: 1 }
+    ],
+    plan(p, ctx) {
+      const bar = stepLength(ctx.bpm, '1/1');
+      return { uniforms: { uOrbit: TAU * (ctx.t / bar) * p.orbit * 2 } };
+    },
+    frag: `#version 300 es
+precision highp float;
+in vec2 vUv; out vec4 o;
+uniform sampler2D uIn; uniform vec2 uRes;
+uniform float u_depth, u_spread, u_twist, u_tilt, u_mix, uOrbit;
+vec2 plane(vec2 uv, float z){
+  float a = uRes.x / uRes.y;
+  vec2 p = uv - 0.5; p.x *= a;
+  float ang = u_twist * z * 0.35; float cs = cos(ang), sn = sin(ang);
+  p = mat2(cs, -sn, sn, cs) * p;
+  p /= 1.0 + z * u_depth * 0.35;
+  p.x *= 1.0 + p.y * u_tilt * z * 0.7;
+  p -= vec2(cos(uOrbit), sin(uOrbit)) * z * u_spread * 0.07;
+  p.x /= a;
+  return p + 0.5;
+}
+float tap(vec2 uv, int ch){
+  if (any(lessThan(uv, vec2(0.0))) || any(greaterThan(uv, vec2(1.0)))) return 0.0;
+  vec3 c = texture(uIn, uv).rgb;
+  return ch == 0 ? c.r : (ch == 1 ? c.g : c.b);
+}
+void main(){
+  float zg = 0.15 * sin(uOrbit * 2.0);
+  vec3 split = vec3(tap(plane(vUv, -1.0), 0), tap(plane(vUv, zg), 1), tap(plane(vUv, 1.0), 2));
+  o = vec4(mix(texture(uIn, vUv).rgb, split, u_mix), 1.0);
+}`
+  },
+  granular: {
+    id: 'granular', label: 'Granular', kind: 'temporal', state: [],
+    params: [
+      { key: 'size', label: 'Grain size', type: 'int', min: 4, max: 64, step: 1, default: 18 },
+      { key: 'density', label: 'Density', type: 'number', min: 0, max: 1, step: 0.01, default: 0.2 },
+      { key: 'spray', label: 'Spray', type: 'number', min: 0, max: 1, step: 0.01, default: 0.35 },
+      { key: 'timeSpray', label: 'Time spray', type: 'number', min: 0, max: 1, step: 0.01, default: 0.4 },
+      { key: 'crush', label: 'Crush', type: 'number', min: 0, max: 1, step: 0.01, default: 0.45 },
+      { key: 'reseed', label: 'Reseed', type: 'enum', options: ['1/4', '1/8', '1/16', '1/32'], default: '1/16' },
+      { key: 'grain', label: 'Film grain', type: 'number', min: 0, max: 1, step: 0.01, default: 0.2 }
+    ],
+    plan(p, ctx) { return { uniforms: { uEpoch: grid(ctx.bpm, p.reseed, ctx.t).step } }; },
+    frag: `#version 300 es
+precision highp float;
+precision highp sampler2DArray;
+in vec2 vUv; out vec4 o;
+uniform sampler2D uIn; uniform sampler2DArray uHist; uniform vec2 uRes;
+uniform float u_size, u_density, u_spray, u_timeSpray, u_crush, u_grain, uEpoch, uHead, uN, uSeed, uTime;
+vec4 h4(vec2 p, float e){
+  vec4 q = vec4(dot(p, vec2(127.1, 311.7)), dot(p, vec2(269.5, 183.3)), dot(p, vec2(419.2, 371.9)), dot(p, vec2(97.3, 53.7)));
+  q += mod(e, 997.0) * vec4(1.717, 3.131, 4.747, 5.959) + uSeed * 0.731;
+  return fract(sin(q) * 43758.5453);
+}
+void main(){
+  vec2 px = vUv * uRes;
+  vec2 cell = floor(px / u_size);
+  vec4 h = h4(cell, uEpoch);
+  vec3 c = texture(uIn, vUv).rgb;
+  if (h.x < u_density) {
+    vec2 local = px - cell * u_size;
+    vec2 off = (h.yz - 0.5) * u_spray * u_size * 6.0;
+    vec2 suv = clamp((cell * u_size + off + local) / uRes, 0.0, 1.0);
+    if (h.w < u_timeSpray) {
+      float age = 1.0 + floor(fract(h.w * 91.7) * (uN - 1.0));
+      float layer = mod(uHead - age + uN, uN);
+      c = texture(uHist, vec3(suv.x, 1.0 - suv.y, layer)).rgb;
+    } else {
+      c = texture(uIn, suv).rgb;
+    }
+    float lv = mix(32.0, 3.0, u_crush);
+    c = floor(c * lv + 0.5) / lv;
+  }
+  float g = fract(sin(dot(px + fract(uTime * 13.1) * vec2(31.0, 17.0), vec2(12.9898, 78.233))) * 43758.5453);
+  c += (g - 0.5) * u_grain * 0.25;
+  o = vec4(c, 1.0);
+}`
+  },
+  scanlines: {
+    id: 'scanlines', label: 'Scanlines / CRT', kind: 'spatial', state: [],
+    params: [
+      { key: 'density', label: 'Lines', type: 'int', min: 60, max: 450, step: 1, default: 225 },
+      { key: 'intensity', label: 'Intensity', type: 'number', min: 0, max: 1, step: 0.01, default: 0.45 },
+      { key: 'roll', label: 'Roll', type: 'number', min: -1, max: 1, step: 0.01, default: 0.15 },
+      { key: 'curvature', label: 'Curvature', type: 'number', min: 0, max: 1, step: 0.01, default: 0.35 },
+      { key: 'mask', label: 'Mask', type: 'number', min: 0, max: 1, step: 0.01, default: 0.3 },
+      { key: 'vignette', label: 'Vignette', type: 'number', min: 0, max: 1, step: 0.01, default: 0.5 },
+      { key: 'flicker', label: 'Flicker', type: 'number', min: 0, max: 1, step: 0.01, default: 0.2, flags: ['flash-risk'], guardCap: 0.08 }
+    ],
+    flashRate() { return Infinity; },
+    plan(p, ctx) { return { uniforms: { uFlick: hash1(ctx.frame * 0.618 + ctx.seed) } }; },
+    frag: `#version 300 es
+precision highp float;
+in vec2 vUv; out vec4 o;
+uniform sampler2D uIn; uniform vec2 uRes;
+uniform float u_density, u_intensity, u_roll, u_curvature, u_mask, u_vignette, u_flicker, uTime, uFlick;
+void main(){
+  vec2 uv = vUv * 2.0 - 1.0;
+  uv *= 1.0 + u_curvature * 0.18 * dot(uv, uv);
+  vec2 suv = uv * 0.5 + 0.5;
+  if (any(lessThan(suv, vec2(0.0))) || any(greaterThan(suv, vec2(1.0)))) { o = vec4(0.0, 0.0, 0.0, 1.0); return; }
+  vec3 c = texture(uIn, suv).rgb;
+  float line = 0.5 + 0.5 * sin((suv.y * u_density + uTime * u_roll * u_density * 0.05) * 6.2831853);
+  c *= mix(1.0, 0.5 + line, u_intensity);
+  float col = mod(floor(vUv.x * uRes.x), 3.0);
+  vec3 m = col < 0.5 ? vec3(1.0, 0.55, 0.55) : (col < 1.5 ? vec3(0.55, 1.0, 0.55) : vec3(0.55, 0.55, 1.0));
+  c *= mix(vec3(1.0), m * 1.43, u_mask);
+  c *= clamp(1.0 - u_vignette * 0.6 * dot(uv * 0.7, uv * 0.7), 0.0, 1.0);
+  c *= 1.0 - u_flicker * uFlick * 0.5;
+  o = vec4(c, 1.0);
+}`
+  }
+};
+
+const DEFAULT_STATE = {
+  version: 1,
+  transport: { bpm: 122, seed: 7 },
+  safety: { flashGuard: true, maxFlashesPerSecond: POLICY.flash.maxPerSecond },
+  modulators: [
+    { id: 'lfo1', type: 'lfo', division: '1/1' },
+    { id: 'sh1', type: 'sh', division: '1/8' }
+  ],
+  stack: [
+    { id: 'stutter', effect: 'stutter', enabled: true, params: {} },
+    { id: 'split', effect: 'rgb3d', enabled: true, params: {} },
+    { id: 'grain', effect: 'granular', enabled: true, params: {} },
+    { id: 'crt', effect: 'scanlines', enabled: true, params: {} }
+  ],
+  routes: [
+    { from: 'lfo1', to: 'split.depth', amount: 0.25 },
+    { from: 'sh1', to: 'grain.density', amount: 0.15 }
+  ],
+  midi: {
+    clock: 'internal',
+    offsetMs: 0,
+    maps: [
+      { type: 'cc', channel: 'any', cc: 74, to: 'grain.density' },
+      { type: 'cc', channel: 'any', cc: 71, to: 'stutter.probability' },
+      { type: 'note', channel: 'any', note: 36, to: 'stutter' }
+    ]
+  }
+};
+
+/* ================= L1 CORE (pure) ================= */
+const clone = (o) => JSON.parse(JSON.stringify(o));
+const isObj = (x) => x !== null && typeof x === 'object' && !Array.isArray(x);
+const isNum = (x) => typeof x === 'number' && Number.isFinite(x);
+
+function normalize(st) {
+  for (const e of st.stack) {
+    const card = CARDS[e.effect];
+    e.params = e.params || {};
+    for (const d of card.params) if (e.params[d.key] === undefined) e.params[d.key] = d.default;
+  }
+  if (!st.midi) st.midi = clone(DEFAULT_STATE.midi);
+  return st;
+}
+
+function validateState(s) {
+  const errs = [];
+  if (!isObj(s)) return { ok: false, errors: ['Root must be a JSON object.'] };
+  if (s.version !== 1) errs.push('version must be 1.');
+  const tr = s.transport;
+  if (!isObj(tr)) errs.push('transport must be an object.');
+  else {
+    if (!isNum(tr.bpm) || tr.bpm < 40 || tr.bpm > 240) errs.push('transport.bpm must be a number from 40 to 240.');
+    if (!Number.isInteger(tr.seed) || tr.seed < 0 || tr.seed > 9999) errs.push('transport.seed must be an integer from 0 to 9999.');
+  }
+  const sf = s.safety;
+  if (!isObj(sf)) errs.push('safety must be an object.');
+  else {
+    if (typeof sf.flashGuard !== 'boolean') errs.push('safety.flashGuard must be true or false.');
+    if (!isNum(sf.maxFlashesPerSecond) || sf.maxFlashesPerSecond < 1 || sf.maxFlashesPerSecond > 10) errs.push('safety.maxFlashesPerSecond must be a number from 1 to 10.');
+  }
+  const modIds = new Set();
+  if (!Array.isArray(s.modulators)) errs.push('modulators must be an array.');
+  else s.modulators.forEach((m, i) => {
+    if (!isObj(m)) { errs.push(`modulators[${i}] must be an object.`); return; }
+    if (typeof m.id !== 'string' || !/^[a-z][a-z0-9-]{0,23}$/.test(m.id)) errs.push(`modulators[${i}].id must be a short lowercase id.`);
+    else if (modIds.has(m.id)) errs.push(`modulators[${i}].id "${m.id}" is used twice.`);
+    else modIds.add(m.id);
+    if (m.type !== 'lfo' && m.type !== 'sh') errs.push(`modulators[${i}].type must be "lfo" or "sh".`);
+    if (!(m.division in DIVS)) errs.push(`modulators[${i}].division must be one of ${Object.keys(DIVS).join(', ')}.`);
+  });
+  const inst = new Map();
+  if (!Array.isArray(s.stack)) errs.push('stack must be an array.');
+  else {
+    if (s.stack.length > POLICY.caps.maxStack) errs.push(`stack has ${s.stack.length} entries; the cap is ${POLICY.caps.maxStack}.`);
+    s.stack.forEach((e, i) => {
+      if (!isObj(e)) { errs.push(`stack[${i}] must be an object.`); return; }
+      if (typeof e.id !== 'string' || !/^[a-z][a-z0-9-]{0,23}$/.test(e.id)) errs.push(`stack[${i}].id must be a short lowercase id (a-z, 0-9, -).`);
+      else if (inst.has(e.id)) errs.push(`stack[${i}].id "${e.id}" is used twice.`);
+      const card = CARDS[e.effect];
+      if (!card) { errs.push(`stack[${i}].effect "${e.effect}" is not a known effect (${Object.keys(CARDS).join(', ')}).`); return; }
+      if (typeof e.enabled !== 'boolean') errs.push(`stack[${i}].enabled must be true or false.`);
+      if (e.params !== undefined && !isObj(e.params)) { errs.push(`stack[${i}].params must be an object.`); return; }
+      const params = e.params || {};
+      for (const k of Object.keys(params)) {
+        const d = card.params.find((x) => x.key === k);
+        const at = `stack[${i}].params.${k}`;
+        if (!d) { errs.push(`${at} is not a param of ${card.id}.`); continue; }
+        const v = params[k];
+        if (d.type === 'enum') { if (!d.options.includes(v)) errs.push(`${at} must be one of ${d.options.join(', ')}.`); }
+        else if (!isNum(v) || v < d.min || v > d.max || (d.type === 'int' && !Number.isInteger(v))) errs.push(`${at} must be ${d.type === 'int' ? 'an integer' : 'a number'} from ${d.min} to ${d.max}.`);
+      }
+      if (typeof e.id === 'string') inst.set(e.id, card);
+    });
+  }
+  if (!Array.isArray(s.routes)) errs.push('routes must be an array.');
+  else s.routes.forEach((r, i) => {
+    if (!isObj(r)) { errs.push(`routes[${i}] must be an object.`); return; }
+    if (!modIds.has(r.from)) errs.push(`routes[${i}].from "${r.from}" is not a modulator id.`);
+    const parts = typeof r.to === 'string' ? r.to.split('.') : [];
+    const card = parts.length === 2 ? inst.get(parts[0]) : null;
+    const d = card ? card.params.find((x) => x.key === parts[1]) : null;
+    if (!d || d.type === 'enum') errs.push(`routes[${i}].to "${r.to}" must address a numeric param as instanceId.paramKey.`);
+    if (!isNum(r.amount) || r.amount < -1 || r.amount > 1) errs.push(`routes[${i}].amount must be a number from -1 to 1.`);
+  });
+  if (s.midi !== undefined) {
+    const m = s.midi;
+    if (!isObj(m)) errs.push('midi must be an object.');
+    else {
+      if (m.clock !== 'internal' && m.clock !== 'midi') errs.push('midi.clock must be "internal" or "midi".');
+      if (!isNum(m.offsetMs) || m.offsetMs < -250 || m.offsetMs > 250) errs.push('midi.offsetMs must be a number from -250 to 250.');
+      if (!Array.isArray(m.maps)) errs.push('midi.maps must be an array.');
+      else m.maps.forEach((x, i) => {
+        const at = `midi.maps[${i}]`;
+        if (!isObj(x)) { errs.push(`${at} must be an object.`); return; }
+        if (!(x.channel === 'any' || (Number.isInteger(x.channel) && x.channel >= 0 && x.channel <= 15))) errs.push(`${at}.channel must be "any" or 0 to 15.`);
+        if (x.type === 'cc') {
+          if (!Number.isInteger(x.cc) || x.cc < 0 || x.cc > 127) errs.push(`${at}.cc must be an integer from 0 to 127.`);
+          const parts = typeof x.to === 'string' ? x.to.split('.') : [];
+          const card = parts.length === 2 ? inst.get(parts[0]) : null;
+          const d = card ? card.params.find((p) => p.key === parts[1]) : null;
+          if (!d || d.type === 'enum') errs.push(`${at}.to "${x.to}" must address a numeric param as instanceId.paramKey.`);
+        } else if (x.type === 'note') {
+          if (!Number.isInteger(x.note) || x.note < 0 || x.note > 127) errs.push(`${at}.note must be an integer from 0 to 127.`);
+          const card = inst.get(x.to);
+          if (!card || card.id !== 'stutter') errs.push(`${at}.to "${x.to}" must be the id of a stutter instance.`);
+        } else errs.push(`${at}.type must be "cc" or "note".`);
+      });
+    }
+  }
+  return { ok: errs.length === 0, errors: errs };
+}
+
+function sampleMod(m, t, bpm, seed) {
+  const len = stepLength(bpm, m.division);
+  if (m.type === 'lfo') return Math.sin(TAU * t / len);
+  if (m.type === 'sh') return hash1(Math.floor(t / len) * 1.37 + seed * 0.71) * 2 - 1;
+  return 0;
+}
+
+function resolveParams(st, t, bpm) {
+  const seed = st.transport.seed;
+  const mods = {};
+  for (const m of st.modulators) mods[m.id] = sampleMod(m, t, bpm, seed);
+  const out = {};
+  for (const e of st.stack) {
+    const v = {};
+    for (const d of CARDS[e.effect].params) v[d.key] = e.params[d.key] !== undefined ? e.params[d.key] : d.default;
+    out[e.id] = v;
+  }
+  for (const r of st.routes) {
+    const [iid, key] = r.to.split('.');
+    const e = st.stack.find((x) => x.id === iid);
+    if (!e || !(r.from in mods)) continue;
+    const d = CARDS[e.effect].params.find((x) => x.key === key);
+    if (!d || d.type === 'enum') continue;
+    out[iid][key] += r.amount * mods[r.from] * (d.max - d.min);
+  }
+  for (const e of st.stack) {
+    for (const d of CARDS[e.effect].params) {
+      if (d.type === 'enum') continue;
+      let x = Math.min(d.max, Math.max(d.min, out[e.id][d.key]));
+      if (d.type === 'int') x = Math.round(x);
+      out[e.id][d.key] = x;
+    }
+  }
+  return out;
+}
+
+const fmt = (x) => (Math.round(x * 100) / 100).toFixed(2);
+function applySafety(params, st, bpm) {
+  if (!st.safety.flashGuard) return { params, notes: ['Flash guard off. Nothing is capped.'] };
+  const limit = st.safety.maxFlashesPerSecond;
+  const out = {}, notes = [];
+  for (const e of st.stack) {
+    const card = CARDS[e.effect];
+    const p = Object.assign({}, params[e.id]);
+    if (e.enabled) for (const d of card.params) {
+      if (!(d.flags || []).includes('flash-risk')) continue;
+      const rate = card.flashRate(p, bpm);
+      if (rate > limit && p[d.key] > d.guardCap) {
+        notes.push(`${e.id}.${d.key} capped ${fmt(p[d.key])}→${fmt(d.guardCap)} (${Number.isFinite(rate) ? rate.toFixed(1) + '/s' : 'every frame'} > ${limit}/s)`);
+        p[d.key] = d.guardCap;
+      }
+    }
+    out[e.id] = p;
+  }
+  return { params: out, notes };
+}
+
+function paramUniforms(card, p) {
+  const u = {};
+  for (const d of card.params) if (d.type !== 'enum') u['u_' + d.key] = p[d.key];
+  return u;
+}
+
+/* ================= L2 BACKEND (WebGL2) ================= */
+function createBackend(canvas, cfg) {
+  const W = cfg.width, H = cfg.height, N = cfg.historyFrames;
+  canvas.width = W; canvas.height = H;
+  const gl = canvas.getContext('webgl2', { antialias: false, alpha: false, preserveDrawingBuffer: false });
+  if (!gl) return { ok: false, error: { code: 'WEBGL2_UNAVAILABLE', message: 'This browser did not give the page a WebGL2 context.', hint: 'Use a current Chrome, Edge, Firefox or Safari with hardware acceleration turned on.' } };
+  gl.bindVertexArray(gl.createVertexArray());
+
+  function setTexParams(target) {
+    gl.texParameteri(target, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+    gl.texParameteri(target, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    gl.texParameteri(target, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(target, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+  }
+  function tex2D() { const t = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, t); gl.texStorage2D(gl.TEXTURE_2D, 1, gl.RGBA8, W, H); setTexParams(gl.TEXTURE_2D); return t; }
+  function target() {
+    const tex = tex2D(), fbo = gl.createFramebuffer();
+    gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
+    gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, tex, 0);
+    const st = gl.checkFramebufferStatus(gl.FRAMEBUFFER);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    if (st !== gl.FRAMEBUFFER_COMPLETE) throw { code: 'FBO_INCOMPLETE', message: 'A render target could not be created (status 0x' + st.toString(16) + ').' };
+    return { tex, fbo };
+  }
+  function compile(type, src, label) {
+    const s = gl.createShader(type); gl.shaderSource(s, src); gl.compileShader(s);
+    if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) { const log = gl.getShaderInfoLog(s); throw { code: 'SHADER_COMPILE', message: `Shader for "${label}" failed to compile.`, detail: log }; }
+    return s;
+  }
+  const vs = compile(gl.VERTEX_SHADER, VERT, 'vertex');
+  const progs = {};
+  function program(id, frag) {
+    const fs = compile(gl.FRAGMENT_SHADER, frag, id);
+    const p = gl.createProgram(); gl.attachShader(p, vs); gl.attachShader(p, fs); gl.linkProgram(p);
+    if (!gl.getProgramParameter(p, gl.LINK_STATUS)) throw { code: 'PROGRAM_LINK', message: `Program "${id}" failed to link.`, detail: gl.getProgramInfoLog(p) };
+    const locs = new Map();
+    progs[id] = { p, loc(n) { if (!locs.has(n)) locs.set(n, gl.getUniformLocation(p, n)); return locs.get(n); } };
+  }
+  program('__copy', COPY_FRAG);
+  for (const c of Object.values(CARDS)) program(c.id, c.frag);
+
+  const src = tex2D();
+  const hist = gl.createTexture();
+  gl.bindTexture(gl.TEXTURE_2D_ARRAY, hist);
+  gl.texStorage3D(gl.TEXTURE_2D_ARRAY, 1, gl.RGBA8, W, H, N);
+  setTexParams(gl.TEXTURE_2D_ARRAY);
+  let head = 0;
+  const ping = [target(), target()];
+  let cur = 0;
+
+  function setUniforms(pr, u) {
+    for (const k in u) {
+      const loc = pr.loc(k); if (loc === null) continue;
+      const v = u[k];
+      if (typeof v === 'number') gl.uniform1f(loc, v);
+      else if (Array.isArray(v) && v.length === 2) gl.uniform2f(loc, v[0], v[1]);
+    }
+  }
+  function draw(id, inputTex, fbo, uniforms, holdTex) {
+    const pr = progs[id];
+    gl.useProgram(pr.p);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
+    gl.viewport(0, 0, W, H);
+    gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, inputTex);
+    let l = pr.loc('uIn'); if (l !== null) gl.uniform1i(l, 0);
+    if (holdTex) { gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, holdTex); l = pr.loc('uHold'); if (l !== null) gl.uniform1i(l, 1); }
+    gl.activeTexture(gl.TEXTURE2); gl.bindTexture(gl.TEXTURE_2D_ARRAY, hist);
+    l = pr.loc('uHist'); if (l !== null) gl.uniform1i(l, 2);
+    setUniforms(pr, Object.assign({ uRes: [W, H], uHead: head, uN: N }, uniforms));
+    gl.drawArrays(gl.TRIANGLES, 0, 3);
+  }
+  return {
+    ok: true,
+    newTarget: target,
+    upload(sourceCanvas, advance) {
+      gl.bindTexture(gl.TEXTURE_2D, src);
+      gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, gl.RGBA, gl.UNSIGNED_BYTE, sourceCanvas);
+      if (advance) {
+        head = (head + 1) % N;
+        gl.bindTexture(gl.TEXTURE_2D_ARRAY, hist);
+        gl.texSubImage3D(gl.TEXTURE_2D_ARRAY, 0, 0, 0, head, W, H, 1, gl.RGBA, gl.UNSIGNED_BYTE, sourceCanvas);
+      }
+    },
+    ingest(toScreen) {
+      if (toScreen) { draw('__copy', src, null, { uFlip: 1 }); return null; }
+      cur = 0; draw('__copy', src, ping[0].fbo, { uFlip: 1 }); return ping[0].tex;
+    },
+    copy(inputTex, tgt) { draw('__copy', inputTex, tgt.fbo, { uFlip: 0 }); },
+    pass(id, inputTex, toScreen, uniforms, targets) {
+      const hold = targets && targets.hold ? targets.hold.tex : null;
+      if (toScreen) { draw(id, inputTex, null, uniforms, hold); return null; }
+      const next = 1 - cur;
+      draw(id, inputTex, ping[next].fbo, uniforms, hold);
+      cur = next; return ping[next].tex;
+    }
+  };
+}
+
+/* ================= L3 IO: source ================= */
+const RW = POLICY.render.width, RH = POLICY.render.height;
+const srcCanvas = document.createElement('canvas');
+srcCanvas.width = RW; srcCanvas.height = RH;
+const sx = srcCanvas.getContext('2d');
+let userImage = null;
+const p2 = (n) => String(n).padStart(2, '0');
+
+function testCard(g, t) {
+  const bg = g.createLinearGradient(0, 0, RW, RH);
+  bg.addColorStop(0, '#141936'); bg.addColorStop(1, '#2b1030');
+  g.fillStyle = bg; g.fillRect(0, 0, RW, RH);
+  const bars = ['#c0c0c0', '#c0c000', '#00c0c0', '#00c000', '#c000c0', '#c00000', '#0000c0'];
+  const bw = RW / bars.length;
+  bars.forEach((c, i) => { g.fillStyle = c; g.fillRect(i * bw, 0, Math.ceil(bw), RH * 0.2); });
+  const ramp = g.createLinearGradient(0, 0, RW, 0);
+  ramp.addColorStop(0, '#000'); ramp.addColorStop(1, '#fff');
+  g.fillStyle = ramp; g.fillRect(0, RH * 0.2, RW, RH * 0.05);
+  g.strokeStyle = 'rgba(255,255,255,0.16)'; g.lineWidth = 1;
+  for (let i = 1; i < 8; i++) { g.beginPath(); g.moveTo(i * RW / 8, RH * 0.25); g.lineTo(i * RW / 8, RH * 0.82); g.stroke(); }
+  const x = ((t * 170) % (RW + 240)) - 120, y = RH * 0.55 + Math.sin(t * 2.6) * RH * 0.12;
+  const rg = g.createRadialGradient(x - 14, y - 14, 6, x, y, 60);
+  rg.addColorStop(0, '#ffd27a'); rg.addColorStop(0.6, '#ff5a7a'); rg.addColorStop(1, 'rgba(120,40,160,0)');
+  g.fillStyle = rg; g.beginPath(); g.arc(x, y, 60, 0, TAU); g.fill();
+  let fs = 96;
+  g.font = `800 ${fs}px Unbounded, 'Arial Black', sans-serif`;
+  const mw = g.measureText('GLITCHLAB').width;
+  if (mw > RW * 0.88) { fs = Math.floor(fs * RW * 0.88 / mw); g.font = `800 ${fs}px Unbounded, 'Arial Black', sans-serif`; }
+  g.fillStyle = '#f3f4fa'; g.textAlign = 'center'; g.textBaseline = 'middle';
+  g.fillText('GLITCHLAB', RW / 2, RH * 0.53);
+}
+
+function hud(g, t, bpm) {
+  const y0 = RH * 0.82;
+  g.fillStyle = '#07080c'; g.fillRect(0, y0, RW, RH - y0);
+  g.font = `600 18px 'JetBrains Mono', monospace`; g.textAlign = 'left'; g.textBaseline = 'middle'; g.fillStyle = '#e8e9f0';
+  const msg = 'UNACCEPTABLE CONDITIONS WILL BE GLITCHED INTO SUBMISSION  ///  ';
+  const mw = g.measureText(msg).width;
+  let x = -((t * 90) % mw);
+  while (x < RW) { g.fillText(msg, x, y0 + 20); x += mw; }
+  const cur = grid(bpm, '1/16', t).step % 16;
+  const cw = 22, gap = 4, sy = RH - 26;
+  for (let i = 0; i < 16; i++) { g.fillStyle = i === cur ? '#ff4f6e' : (i % 4 === 0 ? '#3a3f55' : '#23273a'); g.fillRect(12 + i * (cw + gap), sy, cw, 14); }
+  const fr = Math.floor(t * 30);
+  g.textAlign = 'right'; g.fillStyle = '#9fe8c8'; g.font = `500 16px 'JetBrains Mono', monospace`;
+  g.fillText(`TC 00:${p2(Math.floor(fr / 1800) % 60)}:${p2(Math.floor(fr / 30) % 60)}:${p2(fr % 30)}`, RW - 12, sy + 7);
+}
+
+function drawSource(t, bpm) {
+  if (userImage) {
+    const img = userImage;
+    const s = Math.max(RW / img.width, RH / img.height) * 1.1;
+    const dw = img.width * s, dh = img.height * s;
+    sx.fillStyle = '#000'; sx.fillRect(0, 0, RW, RH);
+    sx.drawImage(img, (RW - dw) / 2 + Math.sin(t * 0.23) * (dw - RW) * 0.45, (RH - dh) / 2 + Math.cos(t * 0.17) * (dh - RH) * 0.45, dw, dh);
+  } else testCard(sx, t);
+  hud(sx, t, bpm);
+}
+
+/* ================= L4 SURFACE: state, UI, loop ================= */
+const $ = (id) => document.getElementById(id);
+const canvas = $('gl');
+const stageMsg = $('stage-msg');
+let state = loadSaved() || normalize(clone(DEFAULT_STATE));
+let backend = null, runtime = new Map();
+const reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+let playing = !reduce;
+let t = 0, clockFrame = 0, last = performance.now();
+
+function loadSaved() {
+  try {
+    const raw = localStorage.getItem(POLICY.storageKey);
+    if (!raw) return null;
+    const s = JSON.parse(raw);
+    return validateState(s).ok ? normalize(s) : null;
+  } catch (e) { return null; }
+}
+function save() { try { localStorage.setItem(POLICY.storageKey, JSON.stringify(state)); } catch (e) { /* per-viewer convenience only */ } }
+
+function showStageError(err) {
+  stageMsg.replaceChildren();
+  const code = document.createElement('div'); code.className = 'code'; code.textContent = err.code || 'ERROR';
+  const msg = document.createElement('div'); msg.textContent = err.message || String(err);
+  stageMsg.append(code, msg);
+  if (err.hint) { const h = document.createElement('div'); h.className = 'hint'; h.textContent = err.hint; stageMsg.append(h); }
+  if (err.detail) { const pre = document.createElement('pre'); pre.textContent = err.detail; stageMsg.append(pre); }
+  stageMsg.hidden = false;
+}
+
+function initBackend() {
+  runtime = new Map();
+  try {
+    const b = createBackend(canvas, POLICY.render);
+    if (!b.ok) { backend = null; showStageError(b.error); return; }
+    backend = b; stageMsg.hidden = true;
+  } catch (e) {
+    backend = null;
+    showStageError(e && e.code ? e : { code: 'INIT_FAILED', message: String(e && e.message || e) });
+  }
+}
+canvas.addEventListener('webglcontextlost', (e) => { e.preventDefault(); backend = null; showStageError({ code: 'CONTEXT_LOST', message: 'The GPU context was lost. Waiting for the browser to restore it; your stack state is kept.' }); });
+canvas.addEventListener('webglcontextrestored', () => initBackend());
+
+function runtimeFor(e, card) {
+  let rt = runtime.get(e.id);
+  if (!rt || rt.effect !== e.effect) {
+    rt = { effect: e.effect, capturedStep: null, targets: {} };
+    for (const s of card.state) rt.targets[s] = backend.newTarget();
+    runtime.set(e.id, rt);
+  }
+  return rt;
+}
+
+/* readouts */
+const stepsEl = $('steps');
+for (let i = 0; i < 16; i++) { const s = document.createElement('span'); s.className = 'st' + (i % 4 === 0 ? ' bar' : ''); stepsEl.append(s); }
+let lastStep = -1, lastHold = null, lastNotes = '';
+function updateReadouts(bpm, holding, notes) {
+  const step = grid(bpm, '1/16', t).step % 16;
+  if (step !== lastStep) {
+    if (lastStep >= 0) stepsEl.children[lastStep].classList.remove('on');
+    stepsEl.children[step].classList.add('on'); lastStep = step;
+  }
+  if (holding !== lastHold) { $('hold-lamp').classList.toggle('on', holding); lastHold = holding; }
+  const n = notes.length ? 'Guard: ' + notes.join(' · ') : 'Guard: nothing capped at these settings.';
+  const text = (reduce && !playing && clockFrame === 0) ? 'Paused because your system asks for reduced motion. Press Play to start.' : (state.safety.flashGuard ? n : notes[0]);
+  if (text !== lastNotes) { const el = $('guard-note'); el.textContent = text; el.classList.toggle('off', !state.safety.flashGuard); lastNotes = text; }
+}
+
+function frame(now) {
+  requestAnimationFrame(frame);
+  const dt = Math.min(0.1, Math.max(0, (now - last) / 1000)); last = now;
+  const follow = state.midi.clock === 'midi' && !!midiAccess;
+  let bpm = state.transport.bpm, live = playing;
+  if (follow) {
+    if (clock.bpm) bpm = clock.bpm;
+    live = clock.running;
+    t = Math.max(0, clockBeats(clock, now) * 60 / bpm + state.midi.offsetMs / 1000);
+    if (live) clockFrame++;
+  } else if (playing) { t += dt; clockFrame++; }
+  updateMidiStatus(now, bpm);
+  if (!backend) return;
+  const seed = state.transport.seed;
+  try {
+    drawSource(t, bpm);
+    backend.upload(srcCanvas, live);
+    const { params, notes } = applySafety(resolveParams(state, t, bpm), state, bpm);
+    const active = state.stack.filter((e) => e.enabled);
+    let input = backend.ingest(active.length === 0);
+    let holding = false;
+    active.forEach((e, i) => {
+      const card = CARDS[e.effect];
+      const rt = runtimeFor(e, card);
+      const p = params[e.id];
+      const plan = card.plan(p, { t, bpm, seed, frame: clockFrame, rt, punch: punch.has(e.id) });
+      if (plan.capture) backend.copy(input, rt.targets.hold);
+      if (plan.holding) holding = true;
+      const u = Object.assign(paramUniforms(card, p), plan.uniforms || {}, { uTime: t, uSeed: seed });
+      input = backend.pass(card.id, input, i === active.length - 1, u, rt.targets);
+    });
+    updateReadouts(bpm, holding, notes);
+  } catch (err) {
+    backend = null;
+    showStageError({ code: 'FRAME_FAILED', message: 'A frame failed to render, so the loop stopped.', detail: String(err && err.message || err) });
+  }
+}
+
+/* rack */
+function routesFor(id, key) { return state.routes.filter((r) => r.to === `${id}.${key}`); }
+function el(tag, attrs, text) { const n = document.createElement(tag); if (attrs) for (const k in attrs) n.setAttribute(k, attrs[k]); if (text !== undefined) n.textContent = text; return n; }
+
+function renderRack() {
+  const rack = $('rack'); rack.replaceChildren();
+  state.stack.forEach((e, idx) => {
+    const card = CARDS[e.effect];
+    const mod = el('section', { class: `mod ${card.kind}${e.enabled ? '' : ' off'}` });
+    const head = el('div', { class: 'mod-head' });
+    const lab = el('label', { for: `en-${e.id}` });
+    const cb = el('input', { type: 'checkbox', id: `en-${e.id}` }); cb.checked = e.enabled;
+    cb.addEventListener('change', () => { e.enabled = cb.checked; mod.classList.toggle('off', !e.enabled); commit(); });
+    lab.append(cb, el('span', null, card.label));
+    const order = el('div', { class: 'order' });
+    const up = el('button', { class: 'btn sq', type: 'button', 'aria-label': `Move ${e.id} up` }, '↑');
+    const dn = el('button', { class: 'btn sq', type: 'button', 'aria-label': `Move ${e.id} down` }, '↓');
+    up.disabled = idx === 0; dn.disabled = idx === state.stack.length - 1;
+    up.addEventListener('click', () => move(idx, -1));
+    dn.addEventListener('click', () => move(idx, 1));
+    order.append(up, dn);
+    const notesIn = state.midi.maps.filter((m) => m.type === 'note' && m.to === e.id);
+    head.append(lab, el('span', { class: `chip ${card.kind}` }, card.kind), el('span', { class: 'iid' }, e.id + (notesIn.length ? ` · punch: note ${notesIn.map((m) => m.note).join(', ')}` : '')), order);
+    mod.append(head);
+    for (const d of card.params) {
+      const row = el('div', { class: 'prow' });
+      const id = `p-${e.id}-${d.key}`;
+      const addr = `${e.id}.${d.key}`;
+      const l = el('label', { for: id }, d.label);
+      const rts = routesFor(e.id, d.key);
+      if (rts.length) l.append(el('span', { class: 'rt' }, rts.map((r) => `~${r.from} ${r.amount > 0 ? '+' : ''}${Math.round(r.amount * 100)}%`).join(' ')));
+      const ccs = state.midi.maps.filter((m) => m.type === 'cc' && m.to === addr);
+      if (ccs.length) l.append(el('span', { class: 'cc' }, ccs.map((m) => `CC${m.cc}${m.channel === 'any' ? '' : ' ch' + (m.channel + 1)}`).join(' ')));
+      if ((d.flags || []).includes('flash-risk')) l.append(el('span', { class: 'fr' }, 'flash-risk'));
+      let input, out;
+      if (d.type === 'enum') {
+        input = el('select', { id });
+        for (const o of d.options) { const opt = el('option', { value: o }, o); if (e.params[d.key] === o) opt.selected = true; input.append(opt); }
+        out = el('output', { for: id }, '');
+        input.addEventListener('change', () => { e.params[d.key] = input.value; commit(); });
+      } else {
+        input = el('input', { type: 'range', id, min: d.min, max: d.max, step: d.step });
+        input.value = e.params[d.key];
+        out = el('output', { for: id }, d.type === 'int' ? String(e.params[d.key]) : fmt(e.params[d.key]));
+        input.addEventListener('input', () => {
+          const v = d.type === 'int' ? parseInt(input.value, 10) : parseFloat(input.value);
+          e.params[d.key] = v; out.textContent = d.type === 'int' ? String(v) : fmt(v); commit();
+          midiEcho(addr, v, d);
+        });
+        input.addEventListener('pointerdown', () => arm(addr, row));
+        input.addEventListener('focus', () => arm(addr, row));
+        if (armed === addr) row.classList.add('armed');
+      }
+      row.append(l, input, out);
+      mod.append(row);
+    }
+    rack.append(mod);
+  });
+}
+function move(idx, dir) {
+  const j = idx + dir; if (j < 0 || j >= state.stack.length) return;
+  const s = state.stack; [s[idx], s[j]] = [s[j], s[idx]];
+  commit(); renderRack();
+  const btn = document.querySelector(`[aria-label="Move ${s[j].id} ${dir < 0 ? 'up' : 'down'}"]`);
+  if (btn && !btn.disabled) btn.focus();
+}
+
+/* JSON panel */
+const ta = $('state-json');
+let jsonTimer = null;
+function syncJson() { if (document.activeElement === ta) return; ta.value = JSON.stringify(state, null, 2); }
+function commit() { clearTimeout(jsonTimer); jsonTimer = setTimeout(() => { save(); syncJson(); }, 150); }
+function setJsonMsg(text, kind) { const m = $('json-msg'); m.textContent = text; m.className = kind || ''; }
+
+$('apply-json').addEventListener('click', () => {
+  let parsed;
+  try { parsed = JSON.parse(ta.value); }
+  catch (err) { setJsonMsg('Not valid JSON: ' + err.message, 'err'); return; }
+  const v = validateState(parsed);
+  if (!v.ok) { setJsonMsg(`Rejected, state unchanged. ${v.errors.length} problem${v.errors.length > 1 ? 's' : ''}:\n- ` + v.errors.join('\n- '), 'err'); return; }
+  state = normalize(parsed); runtime = new Map(); punch.clear(); armed = null;
+  syncTransportInputs(); renderRack(); save(); ta.blur(); syncJson();
+  setJsonMsg(`Loaded. ${state.stack.length} effect${state.stack.length === 1 ? '' : 's'} in the stack.`, 'ok');
+});
+$('reset-json').addEventListener('click', () => {
+  state = normalize(clone(DEFAULT_STATE)); runtime = new Map(); punch.clear(); armed = null;
+  syncTransportInputs(); renderRack(); save(); syncJson();
+  setJsonMsg('Reset to the default stack.', 'ok');
+});
+$('copy-json').addEventListener('click', () => {
+  const text = ta.value;
+  const fallback = () => { ta.focus(); ta.select(); setJsonMsg('Copy is blocked here. The JSON is selected; press Ctrl+C or ⌘C.', ''); };
+  try {
+    navigator.clipboard.writeText(text).then(() => setJsonMsg('Copied.', 'ok'), fallback);
+  } catch (e) { fallback(); }
+});
+
+/* transport */
+function syncTransportInputs() {
+  $('bpm').value = state.transport.bpm;
+  $('seed').value = state.transport.seed;
+  $('guard').checked = state.safety.flashGuard;
+  $('midi-clock').checked = state.midi.clock === 'midi';
+  $('midi-offset').value = state.midi.offsetMs;
+  const follow = state.midi.clock === 'midi' && !!midiAccess;
+  $('play').disabled = follow; $('bpm').disabled = follow; $('tap').disabled = follow;
+}
+function setPlaying(v) { playing = v; const b = $('play'); b.textContent = v ? 'Pause' : 'Play'; b.setAttribute('aria-pressed', String(v)); }
+$('play').addEventListener('click', () => setPlaying(!playing));
+$('bpm').addEventListener('change', () => {
+  const v = Number($('bpm').value);
+  if (Number.isFinite(v) && v >= 40 && v <= 240) { state.transport.bpm = Math.round(v); commit(); }
+  $('bpm').value = state.transport.bpm;
+});
+let taps = [];
+$('tap').addEventListener('click', () => {
+  const now = performance.now();
+  if (taps.length && now - taps[taps.length - 1] > 2000) taps = [];
+  taps.push(now); if (taps.length > 5) taps.shift();
+  if (taps.length >= 2) {
+    const avg = (taps[taps.length - 1] - taps[0]) / (taps.length - 1);
+    state.transport.bpm = Math.min(240, Math.max(40, Math.round(60000 / avg)));
+    $('bpm').value = state.transport.bpm; commit();
+  }
+});
+$('seed').addEventListener('change', () => {
+  const v = Number($('seed').value);
+  if (Number.isInteger(v) && v >= 0 && v <= 9999) { state.transport.seed = v; commit(); }
+  $('seed').value = state.transport.seed;
+});
+$('reseed').addEventListener('click', () => { state.transport.seed = Math.floor(Math.random() * 10000); $('seed').value = state.transport.seed; commit(); });
+$('guard').addEventListener('change', () => { state.safety.flashGuard = $('guard').checked; commit(); });
+
+/* image input: validated at the edge before it reaches the GPU */
+$('img-file').addEventListener('change', (ev) => {
+  const f = ev.target.files && ev.target.files[0];
+  const msg = $('img-msg');
+  const fail = (text) => { msg.textContent = text; msg.className = 'err'; };
+  if (!f) return;
+  if (!/^image\//.test(f.type)) return fail(`"${f.name}" is not an image file.`);
+  if (f.size > POLICY.caps.maxImageBytes) return fail(`That file is ${(f.size / 1048576).toFixed(1)} MB; the cap is ${POLICY.caps.maxImageBytes / 1048576} MB.`);
+  const url = URL.createObjectURL(f);
+  const img = new Image();
+  img.onload = () => {
+    if (img.width > POLICY.caps.maxImageDim || img.height > POLICY.caps.maxImageDim) { URL.revokeObjectURL(url); return fail(`That image is ${img.width}×${img.height}; the cap is ${POLICY.caps.maxImageDim} px per side.`); }
+    userImage = img; msg.textContent = `Using ${f.name} (${img.width}×${img.height}). It stays in this browser.`; msg.className = '';
+    $('use-card').disabled = false;
+  };
+  img.onerror = () => { URL.revokeObjectURL(url); fail(`The browser could not decode "${f.name}".`); };
+  img.src = url;
+});
+$('use-card').addEventListener('click', () => { userImage = null; $('use-card').disabled = true; $('img-msg').textContent = 'Back on the test card.'; $('img-msg').className = ''; });
+
+/* ================= MIDI: L1 pure parse + clock follower, L3 Web MIDI port ================= */
+const RT = { 0xF8: 'clock', 0xFA: 'start', 0xFB: 'continue', 0xFC: 'stop' };
+function parseMidi(d) {
+  const s = d[0];
+  if (s >= 0xF8) return { kind: RT[s] || 'realtime' };
+  if (s === 0xF2) return { kind: 'spp', sixteenths: (d[1] | (d[2] << 7)) };
+  const type = s & 0xF0, ch = s & 0x0F;
+  if (type === 0xB0) return { kind: 'cc', ch, cc: d[1], value: d[2] };
+  if (type === 0x90 && d[2] > 0) return { kind: 'noteon', ch, note: d[1], vel: d[2] };
+  if (type === 0x80 || (type === 0x90 && d[2] === 0)) return { kind: 'noteoff', ch, note: d[1] };
+  return { kind: 'other' };
+}
+function createClockFollower() { return { running: false, ticks: 0, lastTs: null, lastSeen: null, intervals: [], bpm: null }; }
+/* ticks = clocks since start minus one, so the first clock after Start lands on beat 0 */
+function clockEvent(cf, ev, ts) {
+  cf.lastSeen = ts;
+  switch (ev.kind) {
+    case 'start': cf.running = true; cf.ticks = -1; cf.lastTs = null; break;
+    case 'continue': cf.running = true; break;
+    case 'stop': cf.running = false; break;
+    case 'spp': cf.ticks = ev.sixteenths * 6 - 1; break;
+    case 'clock': {
+      if (cf.lastTs !== null) {
+        const d = ts - cf.lastTs;
+        if (d > 0 && d < 250) {
+          cf.intervals.push(d); if (cf.intervals.length > 48) cf.intervals.shift();
+          const avg = cf.intervals.reduce((a, b) => a + b, 0) / cf.intervals.length;
+          cf.bpm = 60000 / (avg * 24);
+        }
+      }
+      cf.lastTs = ts;
+      if (cf.running) cf.ticks++;
+      break;
+    }
+  }
+}
+function clockBeats(cf, now) {
+  const base = Math.max(0, cf.ticks);
+  if (!cf.running || cf.lastTs === null || !cf.bpm || cf.ticks < 0) return base / 24;
+  const tickMs = 60000 / (cf.bpm * 24);
+  return (base + Math.min(0.999, Math.max(0, (now - cf.lastTs) / tickMs))) / 24;
+}
+
+const clock = createClockFollower();
+const punch = new Set();
+let midiAccess = null, learnMode = false, armed = null, blinkTimer = null;
+let lastMidiText = '', lastMidiCheck = 0;
+
+function midiStatus(text, kind) { const m = $('midi-status'); m.textContent = text; m.className = 'guardline' + (kind ? ' ' + kind : ''); lastMidiText = text; }
+function blink() { const l = $('midi-lamp'); l.classList.add('on'); clearTimeout(blinkTimer); blinkTimer = setTimeout(() => l.classList.remove('on'), 80); }
+
+async function connectMidi() {
+  if (!('requestMIDIAccess' in navigator)) { midiStatus('This browser has no Web MIDI. Chrome, Edge and Firefox have it; Safari does not. The preview keeps running without MIDI.', 'err'); return; }
+  midiStatus('Asking the browser for MIDI permission…');
+  try {
+    midiAccess = await navigator.requestMIDIAccess({ sysex: false });
+  } catch (err) {
+    const name = (err && err.name) || 'Error';
+    const hint = (name === 'SecurityError' || name === 'NotAllowedError') ? ' Permission was refused, or this embedded page is not allowed to use MIDI. Open the HTML file directly in Chrome and allow MIDI when asked.' : '';
+    midiStatus(`${name}: ${(err && err.message) || 'MIDI access failed.'}${hint}`, 'err');
+    return;
+  }
+  midiAccess.onstatechange = refreshPorts;
+  ['midi-in', 'midi-out', 'midi-clock', 'midi-learn'].forEach((id) => { $(id).disabled = false; });
+  const b = $('midi-connect'); b.textContent = 'MIDI connected'; b.disabled = true;
+  refreshPorts();
+  syncTransportInputs();
+}
+function refreshPorts() {
+  const inSel = $('midi-in'), outSel = $('midi-out');
+  const keepIn = inSel.value, keepOut = outSel.value;
+  inSel.replaceChildren(el('option', { value: '*' }, 'All inputs'));
+  outSel.replaceChildren(el('option', { value: '' }, 'No output'));
+  let nIn = 0, nOut = 0;
+  for (const p of midiAccess.inputs.values()) { inSel.append(el('option', { value: p.id }, p.name || p.id)); p.onmidimessage = onMidi; nIn++; }
+  for (const p of midiAccess.outputs.values()) { outSel.append(el('option', { value: p.id }, p.name || p.id)); nOut++; }
+  if ([...inSel.options].some((o) => o.value === keepIn)) inSel.value = keepIn;
+  if ([...outSel.options].some((o) => o.value === keepOut)) outSel.value = keepOut;
+  if (state.midi.clock !== 'midi') midiStatus(`MIDI connected: ${nIn} input${nIn === 1 ? '' : 's'}, ${nOut} output${nOut === 1 ? '' : 's'}.${nIn === 0 ? ' No inputs yet; create a virtual bus (IAC Driver on macOS) and it will appear here.' : ''}`);
+  else lastMidiText = '';
+}
+function onMidi(ev) {
+  const sel = $('midi-in').value;
+  if (sel !== '*' && ev.target && ev.target.id !== sel) return;
+  const m = parseMidi(ev.data);
+  const ts = ev.timeStamp || performance.now();
+  if (m.kind === 'clock' || m.kind === 'start' || m.kind === 'continue' || m.kind === 'stop' || m.kind === 'spp') { clockEvent(clock, m, ts); return; }
+  if (m.kind === 'cc') { blink(); onCc(m); }
+  else if (m.kind === 'noteon' || m.kind === 'noteoff') { blink(); onNote(m); }
+}
+const chMatch = (x, ch) => x.channel === 'any' || x.channel === ch;
+function onNote(m) {
+  for (const x of state.midi.maps) {
+    if (x.type !== 'note' || x.note !== m.note || !chMatch(x, m.ch)) continue;
+    if (m.kind === 'noteon') punch.add(x.to); else punch.delete(x.to);
+  }
+}
+function onCc(m) {
+  if (learnMode && armed) {
+    state.midi.maps = state.midi.maps.filter((x) => !(x.type === 'cc' && (x.to === armed || (x.cc === m.cc && chMatch(x, m.ch)))));
+    state.midi.maps.push({ type: 'cc', channel: m.ch, cc: m.cc, to: armed });
+    midiStatus(`Mapped CC${m.cc} on channel ${m.ch + 1} to ${armed}. Click another slider to map the next one.`);
+    armed = null; renderRack(); commit();
+    return;
+  }
+  for (const x of state.midi.maps) if (x.type === 'cc' && x.cc === m.cc && chMatch(x, m.ch)) setParamFromMidi(x.to, m.value);
+}
+function setParamFromMidi(addr, v) {
+  const [iid, key] = addr.split('.');
+  const e = state.stack.find((s) => s.id === iid); if (!e) return;
+  const d = CARDS[e.effect].params.find((p) => p.key === key); if (!d || d.type === 'enum') return;
+  let x = d.min + (v / 127) * (d.max - d.min);
+  x = d.type === 'int' ? Math.round(x) : Number((Math.round(x / d.step) * d.step).toFixed(4));
+  e.params[key] = x;
+  const input = $(`p-${iid}-${key}`);
+  if (input) { input.value = x; const out = input.parentElement.querySelector('output'); if (out) out.textContent = d.type === 'int' ? String(x) : fmt(x); }
+  commit();
+}
+/* echo only user moves; values that arrived over MIDI are never re-sent, so loops can't form */
+function midiEcho(addr, v, d) {
+  if (!midiAccess) return;
+  const id = $('midi-out').value; if (!id) return;
+  const port = midiAccess.outputs.get(id); if (!port) return;
+  const val = Math.max(0, Math.min(127, Math.round((v - d.min) / (d.max - d.min) * 127)));
+  for (const x of state.midi.maps) {
+    if (x.type !== 'cc' || x.to !== addr) continue;
+    try { port.send([0xB0 | (x.channel === 'any' ? 0 : x.channel), x.cc, val]); }
+    catch (err) { midiStatus(`Could not send to ${port.name}: ${err.message}`, 'err'); return; }
+  }
+}
+function arm(addr, row) {
+  if (!learnMode) return;
+  document.querySelectorAll('.prow.armed').forEach((r) => r.classList.remove('armed'));
+  armed = addr; row.classList.add('armed');
+  midiStatus(`Learn: move a knob, or send a CC from Live, to map it to ${addr}.`);
+}
+function updateMidiStatus(now, bpm) {
+  if (!midiAccess || state.midi.clock !== 'midi' || now - lastMidiCheck < 250) return;
+  lastMidiCheck = now;
+  let text, kind = '';
+  const beats = clockBeats(clock, now);
+  const pos = `bar ${Math.floor(beats / 4) + 1}.${Math.floor(beats % 4) + 1}`;
+  if (clock.lastSeen === null) { text = 'Following MIDI clock: nothing received yet. In Live, open Preferences → Link, Tempo & MIDI, turn on Sync for the output port that feeds this input, and press play.'; kind = 'off'; }
+  else if (!clock.running) text = `MIDI clock stopped at ${pos}. Press play in Live.`;
+  else if (now - clock.lastSeen > 500) { text = `Clock lost ${((now - clock.lastSeen) / 1000).toFixed(1)} s ago. Holding the last position.`; kind = 'off'; }
+  else text = `Following MIDI clock: ${bpm.toFixed(1)} BPM · running · ${pos}`;
+  if (text !== lastMidiText) midiStatus(text, kind);
+}
+
+$('midi-connect').addEventListener('click', connectMidi);
+$('midi-clock').addEventListener('change', () => {
+  state.midi.clock = $('midi-clock').checked ? 'midi' : 'internal';
+  lastMidiText = ''; syncTransportInputs(); commit();
+  if (state.midi.clock === 'internal' && midiAccess) refreshPorts();
+});
+$('midi-offset').addEventListener('change', () => {
+  const v = Number($('midi-offset').value);
+  if (Number.isFinite(v) && v >= -250 && v <= 250) { state.midi.offsetMs = Math.round(v); commit(); }
+  $('midi-offset').value = state.midi.offsetMs;
+});
+$('midi-learn').addEventListener('click', () => {
+  learnMode = !learnMode;
+  $('midi-learn').setAttribute('aria-pressed', String(learnMode));
+  if (!learnMode) { armed = null; document.querySelectorAll('.prow.armed').forEach((r) => r.classList.remove('armed')); }
+  midiStatus(learnMode ? 'Learn is on. Click a slider, then move a knob or send a CC.' : 'Learn is off.');
+});
+$('midi-in').addEventListener('change', () => { clock.intervals = []; clock.lastTs = null; });
+
+/* boot */
+syncTransportInputs();
+renderRack();
+ta.value = JSON.stringify(state, null, 2);
+setPlaying(playing);
+if (reduce) { $('guard-note').textContent = 'Paused because your system asks for reduced motion. Press Play to start.'; lastNotes = $('guard-note').textContent; }
+initBackend();
+requestAnimationFrame(frame);
+})();
+</script>
